@@ -9,21 +9,17 @@ use std::{
     process::{Command, Stdio},
 };
 
-static CIRCT_DEP_SCRIPTS: [&str; 1] = ["utils/get-or-tools.sh"];
+static CIRCT_DEP_SCRIPTS: [&str; 2] = [
+    // need CAPNP_VER=0.9.2 on macos
+    "utils/get-capnp.sh",
+    "utils/get-or-tools.sh",
+];
 
 fn main() {
     rerun_if_changed!("build.rs");
-    rerun_if_changed!("Cargo.lock");
+    // rerun_if_changed!("Cargo.lock"); // for some reason reruns build every time!
 
-    let build_dependencies = env::var("BUILD_DEPENDENCIES")
-        .ok()
-        .and_then(|s| s.parse::<bool>().ok())
-        .unwrap_or(false);
     let build_circt = env::var("BUILD_CIRCT")
-        .ok()
-        .and_then(|s| s.parse::<bool>().ok())
-        .unwrap_or(false);
-    let git_submodule_update = env::var("GIT_SUBMODULE_UPDATE")
         .ok()
         .and_then(|s| s.parse::<bool>().ok())
         .unwrap_or(false);
@@ -41,7 +37,7 @@ fn main() {
 
     let num_jobs = num_cpus::get();
 
-    if git_submodule_update {
+    if build_circt {
         warning!("Checking out git submodule...");
         Command::new("git")
             .args(&[
@@ -54,8 +50,7 @@ fn main() {
             .current_dir(cargo_root)
             .status()
             .expect("git submodule update failed!");
-    }
-    if build_dependencies {
+
         let env = HashMap::from([
             ("MAKEFLAGS", format!("-j {num_jobs}")),
             ("CMAKE_BUILD_PARALLEL_LEVEL", format!("{num_jobs}")),
@@ -81,9 +76,7 @@ fn main() {
                 .success());
         }
         warning!("Done building dependencies!");
-    }
 
-    if build_circt {
         warning!("Building LLVM... (this could take a long time!)");
         if !&circt_install_dir.exists() {
             std::fs::create_dir_all(&circt_install_dir).unwrap();
@@ -93,7 +86,11 @@ fn main() {
             .define("LLVM_ENABLE_PROJECTS", "mlir")
             .define("LLVM_EXTERNAL_PROJECTS", "circt")
             .define("LLVM_EXTERNAL_CIRCT_SOURCE_DIR", circt_src_dir)
+            .define("MLIR_INSTALL_AGGREGATE_OBJECTS", "OFF")
+            .define("LLVM_ENABLE_ASSERTIONS", "ON")
             .define("CMAKE_EXPORT_COMPILE_COMMANDS", "ON")
+            .define("CIRCT_BINDINGS_PYTHON_ENABLED", "ON")
+            .define("CIRCT_ENABLE_FRONTENDS", "PyCDE")
             .define("CMAKE_BUILD_TYPE", build_type)
             .out_dir(&circt_install_dir)
             .generator(generator)
@@ -109,6 +106,16 @@ fn main() {
         "LLVMDemangle",
         "LLVMRemarks",
         "LLVMSupport",
+        "LLVMIRPrinter",
+        "LLVMCFIVerify",
+        "LLVMTarget",
+        "LLVMTargetParser",
+        "LLVMPasses",
+        "LLVMMCDisassembler",
+        "MLIRSupport",
+        "MLIRToLLVMIRTranslationRegistration",
+        "MLIRLLVMCommonConversion",
+        "MLIRCAPIRegisterEverything",
         "MLIRIR",
         "MLIRAnalysis",
         "MLIRCAPIFunc",
@@ -122,38 +129,112 @@ fn main() {
         "MLIRInferTypeOpInterface",
         "MLIRInferIntRangeInterface",
         "MLIRPDLToPDLInterp",
+        "MLIRTargetLLVMIRExport",
+        "MLIRPDLDialect",
+        "MLIRPDLInterpDialect",
         "MLIRParser",
         "MLIRPass",
         "MLIRRewrite",
         "MLIRSideEffectInterfaces",
-        "MLIRSupport",
         "MLIRTransformUtils",
         "MLIRTransforms",
+        "MLIRArithTransforms",
+        "MLIRArithUtils",
+        "MLIRArithToLLVM",
+        "MLIRArithDialect",
+        "MLIRArithAttrToLLVMConversion",
+        "MLIRAffineUtils",
+        "MLIRAffineTransformOps",
+        "MLIRAffineDialect",
+        // "MLIRTensorDialect",
+        // "MLIRCAPITensor",
+        // "MLIRSparseTensorDialect",
+        // "MLIRSparseTensorRuntime",
+        // "MLIRSparseTensorPipelines",
+        // "MLIRSparseTensorTransforms",
+        // "MLIRSparseTensorUtils",
+        // "MLIRCAPISparseTensor",
+        // "MLIRTensorTilingInterfaceImpl",
+        // "MLIRTensorTransforms",
+        // "MLIRTensorUtils",
+        // "MLIRTensorToLinalg",
+        // "MLIRTensorInferTypeOpInterfaceImpl",
+        // "MLIRMemRefDialect",
+        // "MLIRMemRefTransforms",
+        // "MLIRMemRefToLLVM",
+        // "MLIRMemRefTransformOps",
+        // "MLIRBufferizationToMemRef",
+        // "MLIRMemRefUtils",
+        "CIRCTSupport",
+        "CIRCTHW",
+        "CIRCTCAPIHWArith",
+        "CIRCTHWArith",
+        "CIRCTHWArithToHW",
         "CIRCTCAPIComb",
         "CIRCTCAPIHW",
-        "CIRCTCAPISV",
-        "CIRCTCAPISeq",
         "CIRCTComb",
-        "CIRCTHW",
-        "CIRCTSV",
         "CIRCTSeq",
+        "CIRCTCAPISeq",
+        "CIRCTSeqTransforms",
+        "CIRCTFSM",
+        "CIRCTCAPIFSM",
+        "CIRCTFSMTransforms",
+        "CIRCTFSMToSV",
+        "CIRCTSV",
+        "CIRCTCAPISV",
+        "CIRCTSVTransforms",
+        "CIRCTExportVerilog",
+        "CIRCTCAPIExportVerilog",
+        "CIRCTAffineToPipeline",
+        // "CIRCTSystemC",
+        // "CIRCTHWToSystemC",
+        // "CIRCTExportSystemC",
+        // "CIRCTSystemCTransforms",
+        "CIRCTCAPIFIRRTL",
+        "CIRCTFIRRTL",
+        "CIRCTExportChiselInterface",
+        "CIRCTFIRRTLToHW",
+        "CIRCTFIRRTLTransforms",
     ];
     for lib in lib_names {
         rustc_link_lib!(lib => "static");
     }
-    if let Some(os) = env::var_os("CARGO_CFG_TARGET_OS")
+    let os = env::var_os("CARGO_CFG_TARGET_OS")
         .map(|s| s.into_string().ok())
         .flatten()
-    {
+        .unwrap_or_default();
+
+    match os.as_str() {
+        "macos" => {
+            rustc_link_lib!("c++");
+
+            if let Ok(prefix) = env::var("HOMEBREW_PREFIX") {
+                rustc_link_search!(format!("{prefix}/lib") => "native");
+            }
+        }
+        "linux" => rustc_link_lib!("stdc++"),
+        _ => {}
+    }
+
+    if let Ok(library) = pkg_config::probe_library("ncurses") {
+        for p in library.link_paths {
+            warning!("Adding library path: {}", p.display());
+            rustc_link_search!(p.display() => "static");
+            rustc_link_search!(p.display());
+        }
+        for p in library.framework_paths {
+            warning!("Adding framework path: {}", p.display());
+            rustc_link_search!(p.display() => "static");
+            rustc_link_search!(p.display());
+        }
+    } else {
+        // panic!("pkg-cinfig failed");
         match os.as_str() {
             "macos" => {
-                rustc_link_lib!("c++");
-
-                if let Ok(prefix) = env::var("HOMEBREW_PREFIX") {
-                    rustc_link_search!(format!("{prefix}/lib") => "native");
-                }
+                let p = "/opt/homebrew/opt/ncurses/lib";
+                rustc_link_search!(p => "static");
+                rustc_link_search!(p);
             }
-            "linux" => rustc_link_lib!("stdc++"),
             _ => {}
         }
     }
@@ -163,7 +244,6 @@ fn main() {
         .header("wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate_block(true)
-        .opaque_type("std::.*")
         .clang_args(&["-I", include_dir.to_str().unwrap()])
         .generate()
         .expect("Unable to generate bindings")

@@ -1,9 +1,10 @@
-// Copyright (c) 2016-2021 Fabian Schuiki
+use crate::crate_prelude::*;
+// Copyright (c) 2022-2023 Kamyar Mohajerani
 
-use circt_sys::capi::mlirGetDialectHandle__seq__;
+define_dialect!(seq);
 
-use crate::mlir::DialectHandle;
-
-pub fn dialect() -> DialectHandle {
-    DialectHandle::from_raw(unsafe { mlirGetDialectHandle__seq__() })
+pub fn register_seq_passes (){
+    unsafe{
+        circt_sys::registerSeqPasses()
+    }
 }

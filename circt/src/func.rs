@@ -1,11 +1,10 @@
 // Copyright (c) 2016-2021 Fabian Schuiki
+// Copyright (c) 2022-2023 Kamyar Mohajerani
 
 use crate::crate_prelude::*;
-use circt_sys::capi::*;
+use circt_sys::*;
 
-pub fn dialect() -> DialectHandle {
-    DialectHandle::from_raw(unsafe { mlirGetDialectHandle__func__() })
-}
+define_dialect!(func);
 
 def_operation!(FuncOp, "func.func");
 def_operation!(CallOp, "func.call");
@@ -22,17 +21,17 @@ impl SingleRegionOp for FuncOp {}
 impl FuncOp {
     /// Get the number of arguments.
     pub fn num_arguments(&self) -> usize {
-        unsafe { mlirBlockGetNumArguments(self.first_block()) as usize }
+        self.first_block().unwrap().num_arguments()
     }
 
     /// Get an argument by index.
-    pub fn argument(&self, index: usize) -> Value {
-        unsafe { Value::from_raw(mlirBlockGetArgument(self.first_block(), index as _)) }
+    pub fn argument(&self, index: usize) -> Option<Value> {
+        self.first_block().unwrap().argument(index)
     }
 
     /// Get an iterator over all arguments.
-    pub fn arguments(&self) -> Box<dyn Iterator<Item = Value> + '_> {
-        Box::new((0..self.num_arguments()).map(move |i| self.argument(i)))
+    pub fn arguments(&self) -> impl Iterator<Item = Value> + '_ {
+        (0..self.num_arguments()).map(|i| self.argument(i).unwrap())
     }
 }
 
@@ -58,65 +57,61 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Build a function.
-    pub fn build(&mut self, builder: &mut Builder) -> FuncOp {
-        builder.build_with(|builder, state| {
-            let arg_types = self.args.iter().map(|(_, ty)| *ty);
-            let result_types = self.results.iter().map(|(_, ty)| *ty);
-            let mlir_arg_types: Vec<MlirType> = arg_types.clone().map(|x| x.raw()).collect();
-            // let mlir_result_types: Vec<MlirType> = result_types.clone().map(|x| x.raw()).collect();
-            // let arg_names: Vec<Attribute> = self
-            //     .args
-            //     .iter()
-            //     .map(|(name, _)| get_string_attr(builder.cx, name))
-            //     .collect();
+    pub fn build(&mut self, builder: &mut OpBuilder) -> FuncOp {
+        builder
+            .build_with(|builder, state| {
+                let ctx = builder.context();
+                let arg_types = self.args.iter().map(|(_, ty)| ty.clone());
+                let result_types = self.results.iter().map(|(_, ty)| ty.clone());
+                let mlir_arg_types: Vec<MlirType> = arg_types.clone().map(|x| x.raw()).collect();
+                let mlir_result_types: Vec<MlirType> =
+                    result_types.clone().map(|x| x.raw()).collect();
+                let arg_names: Vec<_> = self
+                    .args
+                    .iter()
+                    .map(|(name, _)| StringAttr::new(ctx, name))
+                    .collect();
 
-            state.add_attribute("sym_name", get_string_attr(builder.cx, self.name));
-            state.add_attribute(
-                "function_type",
-                get_type_attr(get_function_type(builder.cx, arg_types, result_types)),
-            );
-            // state.add_attribute("arg_names", get_array_attr(builder.cx, arg_names));
-
-            unsafe {
-                let region = mlirRegionCreate();
-                let locations = vec![Location::unknown(builder.cx).raw(); mlir_arg_types.len()];
-                mlirRegionAppendOwnedBlock(
-                    region,
-                    mlirBlockCreate(
-                        mlir_arg_types.len() as _,
-                        mlir_arg_types.as_ptr(),
-                        locations.as_ptr(),
-                    ),
+                state.add_attribute("sym_name", &StringAttr::new(ctx, self.name));
+                state.add_attribute(
+                    "function_type",
+                    &TypeAttr::new(&ctx.get_function_type(arg_types, result_types).unwrap()),
                 );
-                state.add_region(region);
-            }
-        })
+                state.add_attribute("arg_names", &ArrayAttr::new(ctx, arg_names));
+                let region = Region::new();
+                let locations = vec![Location::new_unknown(ctx); mlir_arg_types.len()];
+                let block = Block::new();
+                region.append_block(&block);
+
+                state.add_region(&region);
+            })
+            .unwrap()
     }
 }
 
-impl CallOp {
-    /// Create a new call.
-    pub fn new(
-        builder: &mut Builder,
-        callee: &str,
-        args: impl IntoIterator<Item = Value>,
-        results: impl IntoIterator<Item = Type>,
-    ) -> Self {
-        builder.build_with(|builder, state| {
-            let _num_args = args.into_iter().map(|v| state.add_operand(v)).count();
-            let _num_results = results.into_iter().map(|v| state.add_result(v)).count();
-            state.add_attribute("callee", get_flat_symbol_ref_attr(builder.cx, callee));
-        })
-    }
-}
+// impl CallOp {
+//     /// Create a new call.
+//     pub fn new(
+//         builder: &mut OpBuilder,
+//         callee: &str,
+//         args: impl IntoIterator<Item = Value>,
+//         results: impl IntoIterator<Item = Type>,
+//     ) -> Self {
+//         builder.build_with(|builder, state| {
+//             let _num_args = args.into_iter().map(|v| state.add_operand(v)).count();
+//             let _num_results = results.into_iter().map(|v| state.add_result(v)).count();
+//             state.add_attribute("callee", &get_flat_symbol_ref_attr(builder.ctx, callee));
+//         })
+//     }
+// }
 
-impl ReturnOp {
-    /// Create a new return.
-    pub fn new(builder: &mut Builder, values: impl IntoIterator<Item = Value>) -> Self {
-        builder.build_with(|_, state| {
-            for v in values {
-                state.add_operand(v);
-            }
-        })
-    }
-}
+// impl ReturnOp {
+//     /// Create a new return.
+//     pub fn new(builder: &mut OpBuilder, values: impl IntoIterator<Item = Value>) -> Self {
+//         builder.build_with(|_, state| {
+//             for v in values {
+//                 state.add_operand(v);
+//             }
+//         })
+//     }
+// }

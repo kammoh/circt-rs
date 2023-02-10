@@ -5,19 +5,18 @@ edition = "2021"
 build = "build.rs"
 
 [lib]
-doctest = false
+doctest = true
 
 [dependencies]
-cmake = "0.1.49"
-libc = "*"
-num_cpus = "1.15.0"
+libc = "0.2"
 
 [build-dependencies]
-bindgen = "*"
-cargo-emit = "0.2.1"
-cc = "*"
-cmake = "0.1.49"
-glob = "0.3.1"
-num_cpus = "1.15.0"
+bindgen = "0.63"
+cargo-emit = "0.2"
+cc = "1.0"
+cmake = "0.1"
+glob = "0.3"
+num_cpus = "1.15"
+pkg-config = "0.3"
 
 [features]

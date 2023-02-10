@@ -3,28 +3,63 @@
 //! Utilities to deal with the MLIR context.
 
 use crate::crate_prelude::*;
-use circt_sys::capi::*;
-use crate::mlir::DialectHandle;
+use circt_sys::*;
 
-/// An MLIR context.
-#[derive(Copy, Clone)]
-pub struct Context(MlirContext);
+use super::string::StringRef;
+
+wrap_raw_ptr!(Context);
 
 /// An owned MLIR context.
-pub type OwnedContext = Owned<Context>;
+// pub type OwnedContext = Owned<Context>;
 
 impl Context {
-    /// Load a dialect into this context.
-    pub fn load_dialect(&self, dialect: DialectHandle) {
-        unsafe {
-            mlirDialectHandleLoadDialect(dialect.0, self.0);
-            mlirDialectHandleRegisterDialect(dialect.0, self.0);
-        }
-    }
+
 
     /// Get an interned identifier.
     pub fn get_identifier(&self, ident: &str) -> MlirIdentifier {
-        unsafe { mlirIdentifierGet(self.raw(), ident.into()) }
+        let string_ref = StringRef::from_str(ident);
+        unsafe { mlirIdentifierGet(self.raw(), string_ref.raw()) }
+    }
+
+    /// Create a new integer type of a given width.
+    pub fn get_integer_type(&self, bitwidth: u32) -> Option<Type> {
+        Type::try_from_raw(unsafe { mlirIntegerTypeGet(self.raw(), bitwidth) })
+    }
+
+    /// Create a new function type.
+    pub fn get_function_type(
+        &self,
+        inputs: impl Iterator<Item = impl Ty>,
+        results: impl Iterator<Item = impl Ty>,
+    ) -> Option<Type> {
+        let inputs: Vec<MlirType> = inputs.into_iter().map(|x| x.raw()).collect();
+        let results: Vec<MlirType> = results.into_iter().map(|x| x.raw()).collect();
+        Type::try_from_raw(unsafe {
+            mlirFunctionTypeGet(
+                self.raw(),
+                inputs.len() as _,
+                inputs.as_ptr(),
+                results.len() as _,
+                results.as_ptr(),
+            )
+        })
+    }
+
+    /// Create a new struct type.
+    pub fn get_struct_type(
+        &self,
+        fields: impl IntoIterator<Item = (impl AsRef<str>, Type)>,
+    ) -> Option<Type> {
+        let raw_fields: Vec<_> = fields
+            .into_iter()
+            .map(|(ident, ty)| HWStructFieldInfo {
+                name: self.get_identifier(ident.as_ref()),
+                type_: ty.raw(),
+            })
+            .collect();
+        Type::try_from_raw(unsafe {
+            hwStructTypeGet(self.raw(), raw_fields.len() as _, raw_fields.as_ptr())
+        })
     }
 
     /// Change whether this MLIR context allows unregistered dialect ops.
@@ -36,27 +71,29 @@ impl Context {
     pub fn are_unregistered_dialects_allowed(&self) -> bool {
         unsafe { mlirContextGetAllowUnregisteredDialects(self.raw()) }
     }
+    /// Number of loaded dialects. The built-in dialect is always loaded.
+    pub fn num_loaded_dialects(&self) -> usize {
+        unsafe { mlirContextGetNumLoadedDialects(self.raw()) as _ }
+    }
 }
 
-impl WrapRaw for Context {
-    type RawType = MlirContext;
-    fn from_raw(raw: MlirContext) -> Self {
-        Self(raw)
-    }
-    fn raw(&self) -> MlirContext {
-        self.0
-    }
-}
+impl_create!(Context);
+impl_into_owned!(Context);
 
 impl Owned<Context> {
-    /// Create a new MLIR context.
     pub fn new() -> Self {
-        Self(Context::from_raw(unsafe { mlirContextCreate() }))
+        Self(Context::create().unwrap())
     }
 }
+// impl Owned<Context> {
+//     /// Create a new MLIR context.
+//     pub fn new() -> Self {
+//         Self(Context::from_raw(unsafe { mlirContextCreate() }))
+//     }
+// }
 
-impl IntoOwned for Context {
-    fn destroy(&mut self) {
-        unsafe { mlirContextDestroy(self.0) }
-    }
-}
+// impl IntoOwned for Context {
+//     fn destroy(&mut self) {
+//         unsafe { mlirContextDestroy(self.0) }
+//     }
+// }

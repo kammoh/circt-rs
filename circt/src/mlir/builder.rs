@@ -1,37 +1,36 @@
 // Copyright (c) 2016-2021 Fabian Schuiki
+// Copyright (c) 2022-2023 Kamyar Mohajerani
 
 //! A builder for IR operations.
 
-use circt_sys::capi::{mlirBlockCreate, mlirBlockGetParentRegion, mlirRegionInsertOwnedBlockAfter, MlirOperation, mlirBlockInsertOwnedOperationAfter, mlirBlockInsertOwnedOperationBefore};
-
 use crate::crate_prelude::*;
 
-
 /// A builder for MLIR operations.
-pub struct Builder {
+pub struct OpBuilder<'a> {
     /// The surrounding MLIR context.
-    pub(crate) cx: Context,
+    ctx: &'a Context,
     /// The location to assign to the operations being built.
-    pub(crate) loc: Location,
-    /// The block we're currently inserting into.
-    insert_block: Option<Block>,
-    /// The insertion position within the block.
-    insert_point: InsertPoint,
-    /// The last block that was inserted. Used to order created blocks in
-    /// sequence if there are no intermittent `set_insertion_point_*` calls.
-    insert_block_after: Option<Block>,
+    loc: Location,
+    pub insert_point: Option<InsertPoint>,
 }
 
-impl Builder {
+impl<'a> OpBuilder<'a> {
     /// Create a new builder.
-    pub fn new(cx: Context) -> Self {
+    pub fn new(ctx: &'a Context) -> Self {
+        Self::new_with_loc(ctx, Location::new_unknown(ctx))
+    }
+
+    /// Create a new builder with Location loc
+    pub fn new_with_loc(ctx: &'a Context, loc: Location) -> Self {
         Self {
-            cx,
-            loc: Location::unknown(cx),
-            insert_block: None,
-            insert_point: InsertPoint::BlockStart,
-            insert_block_after: None,
+            ctx,
+            loc,
+            insert_point: None,
         }
+    }
+
+    pub fn context(&self) -> &Context {
+        self.ctx
     }
 
     /// Set the location assigned to new operations.
@@ -40,87 +39,76 @@ impl Builder {
     }
 
     /// Get the current location that is assigned to new operations.
-    pub fn loc(&self) -> Location {
-        self.loc
+    pub fn loc(&self) -> &Location {
+        &self.loc
     }
 
-    /// Set the insertion point to the start of a block.
-    pub fn set_insertion_point_to_start(&mut self, block: Block) {
-        self.insert_block = Some(block);
-        self.insert_point = InsertPoint::BlockStart;
-        self.insert_block_after = self.insert_block;
+    pub fn set_insertion_point(&mut self, insert_point: Option<InsertPoint>) {
+        self.insert_point = insert_point;
     }
 
-    /// Set the insertion point to the end of a block.
-    pub fn set_insertion_point_to_end(&mut self, block: Block) {
-        self.insert_block = Some(block);
-        self.insert_point = InsertPoint::BlockEnd;
-        self.insert_block_after = self.insert_block;
-    }
-
-    /// Set the insertion point to before an operation.
-    pub fn set_insertion_point_before(&mut self, op: impl OperationExt) {
-        self.insert_block = Some(op.parent_block());
-        self.insert_point = InsertPoint::Before(op.raw());
-        self.insert_block_after = self.insert_block;
-    }
-
-    /// Set the insertion point to after an operation.
-    pub fn set_insertion_point_after(&mut self, op: impl OperationExt) {
-        self.insert_block = Some(op.parent_block());
-        self.insert_point = InsertPoint::After(op.raw());
-        self.insert_block_after = self.insert_block;
-    }
-
-    /// Insert an operation at the currently configured position.
-    pub fn insert(&mut self, op: impl WrapRaw<RawType = MlirOperation>) {
-        let null_op = MlirOperation {
-            ptr: std::ptr::null_mut(),
-        };
-        let op = op.raw();
-        let block = self.insert_block.expect("insertion block not set");
-        unsafe {
-            match self.insert_point {
-                InsertPoint::BlockStart => mlirBlockInsertOwnedOperationAfter(block, null_op, op),
-                InsertPoint::BlockEnd => mlirBlockInsertOwnedOperationBefore(block, null_op, op),
-                InsertPoint::After(ref_op) => mlirBlockInsertOwnedOperationAfter(block, ref_op, op),
-                InsertPoint::Before(ref_op) => {
-                    mlirBlockInsertOwnedOperationBefore(block, ref_op, op)
-                }
-            }
+    pub fn insert_in(&self, op: &impl Op, insert_point: &InsertPoint) {
+        match insert_point {
+            InsertPoint::BlockStart(block) => block.prepend_op(op),
+            InsertPoint::BlockEnd(block) => block.append_op(op),
+            InsertPoint::AfterOp(block, ref_op) => block.insert_op_after(op, ref_op),
+            InsertPoint::BeforeOp(block, ref_op) => block.insert_op_before(op, ref_op),
         }
-        self.insert_point = InsertPoint::After(op);
+    }
+
+    pub fn insert(&self, op: &impl Op) {
+        if let Some(ref insert_point) = self.insert_point {
+            self.insert_in(op, insert_point)
+        }
     }
 
     /// Build an operation through a callback that populates an
     /// `OperationState`.
-    pub fn build_with<Op: OperationExt + Copy>(
+    pub fn build_with<Op: NamedOp>(
         &mut self,
-        with: impl FnOnce(&mut Builder, &mut OperationState),
-    ) -> Op {
-        let mut state = OperationState::new(Op::operation_name(), self.loc.raw());
-        with(self, &mut state);
-        let op = state.build();
-        self.insert(op);
-        op
+        with_fn: impl FnOnce(&mut Self, &mut OperationState),
+    ) -> Option<Op> {
+        let mut state = OperationState::new(Op::operation_name(), &self.loc);
+        with_fn(self, &mut state);
+        let op: Op = state.build()?;
+        self.insert(&op);
+        Some(op)
     }
+    //// Create a new block after the current one.
+    // pub fn add_block(&mut self) -> Block {
+    //     let ref_block = self.insert_block.as_ref().expect("insertion block not set");
+    //     let new_block = Block::create(&[], &[]).unwrap();
+    //     let region = ref_block.get_parent_region().unwrap();
+    //     // let after = self
+    //     //     .insert_block_after
+    //     //     .as_ref()
+    //     //     .expect("insertion block not set");
+    //     // region.insert_block_after(after, &new_block);
+    //     // let new_block = new_block;
+    //     // self.insert_block_after = Some(new_block.clone());
+    //     // FIXME!!! multiple copies of MlirBlock floating around, not safe to _Destroy
+    //     new_block
+    // }
 
-    /// Create a new block after the current one.
-    pub fn add_block(&mut self) -> Block {
-        let block = self.insert_block.expect("insertion block not set");
-        let after = self.insert_block_after.expect("insertion block not set");
-        unsafe {
-            let new_block = mlirBlockCreate(0, [].as_ptr(), [].as_ptr());
-            mlirRegionInsertOwnedBlockAfter(mlirBlockGetParentRegion(block), after, new_block);
-            self.insert_block_after = Some(new_block);
-            new_block
-        }
-    }
+    // pub fn unknown_location(&self) -> Location {
+    //     Location::unknown(self.ctx)
+    // }
 }
 
-enum InsertPoint {
-    BlockStart,
-    BlockEnd,
-    After(MlirOperation),
-    Before(MlirOperation),
+// #[derive(Clone, Copy, Default)]
+// pub enum InsertPoint<'a, 'b> {
+//     BlockStart(&'a Block),
+//     BlockEnd(&'a Block),
+//     AfterOp(&'a Block, &'b Operation),
+//     BeforeOp(&'a Block, &'b Operation),
+//     #[default]
+//     None,
+// }
+
+#[derive(Clone)]
+pub enum InsertPoint {
+    BlockStart(Block),
+    BlockEnd(Block),
+    AfterOp(Block, Operation),
+    BeforeOp(Block, Operation),
 }
