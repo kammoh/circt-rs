@@ -1,11 +1,15 @@
+// Copyright (c) 2016-2021 Fabian Schuiki
+// Copyright (c) 2022-2023 Kamyar Mohajerani
+
+use crate::{comb::trunc_or_zext_to_clog2, crate_prelude::*};
+
+use num::Num;
 use std::borrow::Borrow;
 
-use super::*;
-use crate::crate_prelude::*;
-
-use num::{BigInt, Num};
+use super::{ArrayType, StructType};
 
 def_operation!(ConstantOp, "hw.constant");
+impl_op_single_result!(ConstantOp);
 
 impl ConstantOp {
     /// Create a new constant value.
@@ -50,120 +54,142 @@ impl OutputOp {
 
 def_operation!(InstanceOp, "hw.instance"); // n-args, m-results
 
-// impl ArrayCreateOp {
-//     /// Create a new array value.
-//     pub fn new(builder: &mut OpBuilder, ty: Type, values: impl IntoIterator<Item = Value>) -> Self {
-//         builder.build_with(|_, state| {
-//             for value in values {
-//                 state.add_operand(value);
-//             }
-//             state.add_result(ty);
-//         })
-//     }
-// }
+impl ArrayCreateOp {
+    /// Create a new array value.
+    pub fn new(
+        builder: &mut OpBuilder,
+        ty: &Type,
+        values: impl IntoIterator<Item = impl Val>,
+    ) -> Self {
+        builder
+            .build_with(|_, state| {
+                state.add_operands(values);
+                state.add_result(ty);
+            })
+            .unwrap()
+    }
+}
 
-// impl StructCreateOp {
-//     /// Create a new struct value.
-//     pub fn new(builder: &mut OpBuilder, ty: Type, values: impl IntoIterator<Item = Value>) -> Self {
-//         builder.build_with(|_, state| {
-//             for value in values {
-//                 state.add_operand(value);
-//             }
-//             state.add_result(ty);
-//         })
-//     }
-// }
+impl StructCreateOp {
+    /// Create a new struct value.
+    pub fn build(
+        builder: &mut OpBuilder,
+        ty: &Type,
+        values: impl IntoIterator<Item = impl Val>,
+    ) -> Self {
+        builder
+            .build_with(|_, state| {
+                state.add_operands(values);
+                state.add_result(ty);
+            })
+            .unwrap()
+    }
+}
 
-// impl ArraySliceOp {
-//     pub fn with_sizes(builder: &mut OpBuilder, value: Value, offset: Value, length: usize) -> Self {
-//         let ty = value.ty().unwrap();
-//         let offset = trunc_or_zext_to_clog2(builder, offset, ty);
-//         Self::new(
-//             builder,
-//             get_array_type(&array_type_element(ty).unwrap(), length).unwrap(),
-//             value,
-//             offset,
-//         )
-//     }
+impl ArraySliceOp {
+    pub fn with_sizes(
+        builder: &mut OpBuilder,
+        value: &Value,
+        offset: &Value,
+        length: usize,
+    ) -> Option<Self> {
+        let ty: hw::ArrayType = value.ty().try_into().unwrap();
+        let offset = trunc_or_zext_to_clog2(builder, offset, &ty)?;
+        Self::build(
+            builder,
+            &hw::ArrayType::new(&ty.element_type()?, length),
+            value,
+            &offset,
+        )
+    }
 
-//     pub fn with_const_offset(
-//         builder: &mut OpBuilder,
-//         value: Value,
-//         offset: usize,
-//         length: usize,
-//     ) -> Self {
-//         let offset = crate::hw::ConstantOp::new(builder, 64, &offset.into())
-//             .result(0)
-//             .unwrap();
-//         Self::with_sizes(builder, value, offset, length)
-//     }
-// }
+    pub fn with_const_offset(
+        builder: &mut OpBuilder,
+        value: &Value,
+        offset: usize,
+        length: usize,
+    ) -> Self {
+        let offset = crate::hw::ConstantOp::build(builder, 64, offset)
+            .unwrap()
+            .result();
+        Self::with_sizes(builder, value, &offset, length).unwrap()
+    }
+}
 
-// impl ArrayConcatOp {
-//     pub fn new(builder: &mut OpBuilder, values: impl IntoIterator<Item = Value>) -> Self {
-//         builder.build_with(|_, state| {
-//             let mut width = 0;
-//             let mut element_ty = None;
-//             for value in values {
-//                 state.add_operand(value);
-//                 let ty = value.ty().unwrap();
-//                 width += array_type_size(ty);
-//                 element_ty = array_type_element(ty);
-//             }
-//             state.add_result(get_array_type(&element_ty.unwrap(), width).unwrap());
-//         })
-//     }
-// }
+impl ArrayConcatOp {
+    pub fn new(builder: &mut OpBuilder, values: impl IntoIterator<Item = Value>) -> Self {
+        builder
+            .build_with(|_, state| {
+                let mut width = 0;
+                let mut element_ty = None;
+                for value in values {
+                    state.add_operand(&value);
+                    let ty = ArrayType::try_from(value.ty()).unwrap();
+                    width += ty.size();
+                    element_ty = ty.element_type();
+                }
+                state.add_result(&ArrayType::new(&element_ty.unwrap(), width));
+            })
+            .unwrap()
+    }
+}
 
-// impl ArrayGetOp {
-//     pub fn new(builder: &mut OpBuilder, value: Value, offset: Value) -> Self {
-//         let ty = value.ty().unwrap();
-//         let offset = trunc_or_zext_to_clog2(builder, offset, ty);
-//         builder.build_with(|_, state| {
-//             state.add_operand(value);
-//             state.add_operand(offset);
-//             state.add_result(array_type_element(ty).unwrap());
-//         })
-//     }
+impl ArrayGetOp {
+    pub fn build(builder: &mut OpBuilder, value: &Value, offset: &Value) -> Self {
+        let ty = ArrayType::try_from(value.ty()).unwrap();
+        let offset = trunc_or_zext_to_clog2(builder, offset, &ty).unwrap();
+        builder
+            .build_with(|_, state| {
+                state.add_operand(value);
+                state.add_operand(&offset);
+                state.add_result(&ty.element_type().unwrap());
+            })
+            .unwrap()
+    }
 
-//     pub fn with_const_offset(builder: &mut OpBuilder, value: Value, offset: usize) -> Self {
-//         let offset = crate::hw::ConstantOp::new(builder, 64, &offset.into())
-//             .result(0)
-//             .unwrap();
-//         Self::new(builder, value, offset)
-//     }
-// }
+    pub fn with_const_offset(builder: &mut OpBuilder, value: &Value, offset: usize) -> Self {
+        let offset = crate::hw::ConstantOp::build(builder, 64, offset)
+            .unwrap()
+            .result();
+        Self::build(builder, value, &offset)
+    }
+}
 
-// impl StructExtractOp {
-//     pub fn new(builder: &mut OpBuilder, value: Value, offset: usize) -> Self {
-//         builder.build_with(|_, state| {
-//             state.add_operand(value);
-//             let (field_name, field_ty) = struct_type_field(value.ty().unwrap(), offset);
-//             state.add_attribute("field", &get_string_attr(builder.ctx, &field_name));
-//             state.add_result(field_ty);
-//         })
-//     }
-// }
+impl StructExtractOp {
+    pub fn build(builder: &mut OpBuilder, value: &Value, offset: usize) -> Option<Self> {
+        builder.build_with(|builder, state| {
+            state.add_operand(value);
+            let ty: StructType = value.ty().try_into().unwrap();
+            let (field_name, field_ty) = ty.field_at(offset).unwrap();
+            state.add_attribute("field", &StringAttr::new(builder.context(), &field_name));
+            state.add_result(&field_ty);
+        })
+    }
+}
 
-// impl StructInjectOp {
-//     pub fn new(builder: &mut OpBuilder, value: Value, field_value: Value, offset: usize) -> Self {
-//         let ty = value.ty().unwrap();
-//         builder.build_with(|_, state| {
-//             state.add_operand(value);
-//             state.add_operand(field_value);
-//             let (field_name, _) = struct_type_field(ty, offset);
-//             state.add_attribute("field", &get_string_attr(builder.ctx, &field_name));
-//             state.add_result(ty);
-//         })
-//     }
-// }
+impl StructInjectOp {
+    pub fn new(builder: &mut OpBuilder, value: &Value, field_value: &Value, offset: usize) -> Self {
+        let ty = StructType::try_from(value.ty()).unwrap();
+        builder
+            .build_with(|builder, state| {
+                state.add_operand(value);
+                state.add_operand(field_value);
+                let (field_name, _) = ty.field_at(offset).unwrap();
+                state.add_attribute("field", &StringAttr::new(builder.context(), &field_name));
+                state.add_result(&ty);
+            })
+            .unwrap()
+    }
+}
 
-// impl BitcastOp {
-//     /// Create a new bitcast.
-//     pub fn new(builder: &mut OpBuilder, ty: Type, value: Value) -> Self {
-//         builder.build_with(move |_, state| {
-//             state.add_operand(value);
-//             state.add_result(ty);
-//         })
-//     }
-// }
+impl BitcastOp {
+    /// Create a new bitcast.
+    pub fn new(builder: &mut OpBuilder, ty: &Type, value: &Value) -> Self {
+        builder
+            .build_with(move |_, state| {
+                state.add_operand(value);
+                state.add_result(ty);
+            })
+            .unwrap()
+    }
+}

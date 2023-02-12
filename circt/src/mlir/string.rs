@@ -2,7 +2,10 @@
 
 use crate::crate_prelude::*;
 use circt_sys::*;
-use std::{fmt::Display, marker::PhantomData};
+use std::{
+    fmt::{Debug, Display},
+    marker::PhantomData,
+};
 
 pub struct StringRef<'a>(MlirStringRef, PhantomData<&'a MlirStringRef>)
 where
@@ -48,12 +51,26 @@ impl<'a> PartialEq for StringRef<'a> {
     }
 }
 
+impl<'a> Display for StringRef<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'a> Debug for StringRef<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "StringRef: {}", self.as_str())
+    }
+}
+
 wrap_raw_ptr!(Identifier);
 
 impl Identifier {
     /// Gets an identifier with the given string value.
-    pub fn new(ctx: &Context, value: &StringRef) -> Self {
-        Identifier::from_raw(unsafe { mlirIdentifierGet(ctx.raw(), value.raw()) })
+    pub fn new(ctx: &Context, value: &str) -> Self {
+        Identifier::from_raw(unsafe {
+            mlirIdentifierGet(ctx.raw(), StringRef::from_str(value).raw())
+        })
     }
     /// Gets the string value of the identifier.
     pub fn to_string_ref(&self) -> StringRef {
@@ -64,6 +81,12 @@ impl Identifier {
 impl Display for Identifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.to_string_ref().as_str())
+    }
+}
+
+impl Debug for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Identifier: {}", self.to_string_ref().as_str())
     }
 }
 

@@ -67,10 +67,29 @@ pub trait Ty: WrapRawPtr<RawType = MlirType> {
 /// including for Type (unspecified type)
 impl<T> Ty for T where T: WrapRawPtr<RawType = MlirType> {}
 
+
+// impl<T> From<T> for Type where T: Ty {
+//     fn from(value: T) -> Self {
+//         Self::from_raw(value.raw())
+//     }
+// }
+
+impl<T> From<&T> for Type where T: Ty {
+    fn from(value: &T) -> Self {
+        Self::from_raw(value.raw())
+    }
+}
+
+
+
 pub trait TyIsa: Ty {
     fn isa(_: &Type) -> bool {
         panic!("not implemented")
     }
+}
+
+pub trait TyHasWidth: Ty {
+
 }
 
 def_type!(IndexType);

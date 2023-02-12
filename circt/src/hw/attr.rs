@@ -3,6 +3,20 @@
 use crate::crate_prelude::*;
 use circt_sys::*;
 
+def_attr!(GlobalRefAttr);
+
+impl GlobalRefAttr {
+    pub fn new(sym_name: StringAttr) -> Option<Self> {
+        Self::try_from_raw(unsafe { hwGlobalRefAttrGet(sym_name.raw()) })
+    }
+}
+
+impl AttrIsa for GlobalRefAttr {
+    fn isa(attr: &impl Attr) -> bool {
+        unsafe { hwAttrIsAGlobalRefAttr(attr.raw()) }
+    }
+}
+
 def_attr!(InnerRefAttr);
 
 /// Encapsulates references to inner symbols.
@@ -16,14 +30,14 @@ impl InnerRefAttr {
     pub fn name(&self) -> StringAttr {
         StringAttr::try_from_raw(unsafe { hwInnerRefAttrGetName(self.raw()) }).unwrap()
     }
+
     pub fn module(&self) -> StringAttr {
         StringAttr::try_from_raw(unsafe { hwInnerRefAttrGetModule(self.raw()) }).unwrap()
     }
 }
 
 impl AttrIsa for InnerRefAttr {
-    /// Checks whether the given attribute is an integer attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { hwAttrIsAInnerRefAttr(attr.raw()) }
     }
 }
@@ -41,11 +55,18 @@ impl ParamDeclAttr {
     pub fn name(&self) -> Option<StringRef> {
         StringRef::try_from_raw(unsafe { hwParamDeclAttrGetName(self.0) })
     }
+
     pub fn ty(&self) -> Option<Type> {
         Type::try_from_raw(unsafe { hwParamDeclAttrGetType(self.0) })
     }
 
-    pub fn isa(attr: &impl Attr) -> bool {
+    pub fn value(&self) -> Option<Attribute> {
+        Attribute::try_from_raw(unsafe { hwParamDeclAttrGetValue(self.0) })
+    }
+}
+
+impl AttrIsa for ParamDeclAttr {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { hwAttrIsAParamDeclAttr(attr.raw()) }
     }
 }
@@ -67,8 +88,10 @@ impl ParamDeclRefAttr {
     pub fn ty(&self) -> Option<Type> {
         Type::try_from_raw(unsafe { hwParamDeclRefAttrGetType(self.0) })
     }
+}
 
-    pub fn isa(attr: &impl Attr) -> bool {
+impl AttrIsa for ParamDeclRefAttr {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { hwAttrIsAParamDeclRefAttr(attr.raw()) }
     }
 }
@@ -79,8 +102,10 @@ impl ParamVerbatimAttr {
     pub fn new(text: StringAttr) -> Self {
         Self::try_from_raw(unsafe { hwParamVerbatimAttrGet(text.raw()) }).unwrap()
     }
+}
 
-    pub fn isa(attr: &impl Attr) -> bool {
+impl AttrIsa for ParamVerbatimAttr {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { hwAttrIsAParamVerbatimAttr(attr.raw()) }
     }
 }

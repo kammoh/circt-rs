@@ -5,7 +5,7 @@
 
 use crate::crate_prelude::*;
 use circt_sys::*;
-use num::BigInt;
+use num::{BigInt, Num};
 use std::{
     borrow::Borrow,
     fmt::{Debug, Display},
@@ -45,7 +45,7 @@ impl Debug for Attribute {
 }
 
 impl AttrIsa for Attribute {
-    fn isa(_: &Attribute) -> bool {
+    fn isa(_: &impl Attr) -> bool {
         true
     }
 }
@@ -86,7 +86,7 @@ pub trait Attr: WrapRawPtr<RawType = MlirAttribute> {
 impl<T> Attr for T where T: WrapRawPtr<RawType = MlirAttribute> {}
 
 pub trait AttrIsa: Attr {
-    fn isa(_: &Attribute) -> bool {
+    fn isa(_: &impl Attr) -> bool {
         panic!("not implemented!")
     }
 }
@@ -106,7 +106,7 @@ impl ArrayAttr {
 
 impl AttrIsa for ArrayAttr {
     /// Checks whether the given attribute is an array attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { mlirAttributeIsAArray(attr.raw()) }
     }
 }
@@ -136,7 +136,7 @@ impl DictionaryAttr {
 
 impl AttrIsa for DictionaryAttr {
     /// Checks whether the given attribute is a dictionary attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { mlirAttributeIsADictionary(attr.raw()) }
     }
 }
@@ -145,13 +145,13 @@ def_attr!(IntegerAttr);
 
 impl AttrIsa for IntegerAttr {
     /// Checks whether the given attribute is an integer attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { mlirAttributeIsAInteger(attr.raw()) }
     }
 }
 
 impl IntegerAttr {
-    pub fn new(ty: &Type, value: impl Into<i64>) -> Self {
+    pub fn new(ty: &impl Ty, value: impl Into<i64>) -> Self {
         Self::from_raw(unsafe { mlirIntegerAttrGet(ty.raw(), value.into()) })
     }
 
@@ -159,13 +159,12 @@ impl IntegerAttr {
     pub fn from_str(ty: &impl Ty, value: &str) -> Self {
         Self::try_from_raw(unsafe {
             mlirIntegerAttrGetFromString(ty.raw(), StringRef::from_str(value).raw())
-        })
-        .unwrap()
+        }).unwrap()
     }
 
     /// Creates an integer attribute of the given type by parsing the given string into an integer value.
-    pub fn from_bigint(ty: &impl Ty, value: impl Into<BigInt>) -> Self {
-        Self::from_str(ty, value.into().to_string().as_str())
+    pub fn from_bigint(ty: &impl Ty, value: impl Num + ToString) -> Self {
+        Self::from_str(ty, value.to_string().as_str())
     }
 }
 
@@ -173,7 +172,7 @@ def_attr!(OpaqueAttr);
 
 impl AttrIsa for OpaqueAttr {
     /// Checks whether the given attribute is an opaque attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { mlirAttributeIsAOpaque(attr.raw()) }
     }
 }
@@ -208,7 +207,7 @@ impl StringAttr {
 
 impl AttrIsa for StringAttr {
     /// Checks whether the given attribute is an integer attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { mlirAttributeIsAString(attr.raw()) }
     }
 }
@@ -225,7 +224,7 @@ impl SymbolRefAttr {
 
 impl AttrIsa for SymbolRefAttr {
     /// Checks whether the given attribute is a symbol reference attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { mlirAttributeIsASymbolRef(attr.raw()) }
     }
 }
@@ -246,7 +245,7 @@ impl TypeAttr {
 
 impl AttrIsa for TypeAttr {
     /// Checks whether the given attribute is a type attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { mlirAttributeIsAType(attr.raw()) }
     }
 }
@@ -262,7 +261,7 @@ impl UnitAttr {
 
 impl AttrIsa for UnitAttr {
     /// Checks whether the given attribute is a unit attribute.
-    fn isa(attr: &Attribute) -> bool {
+    fn isa(attr: &impl Attr) -> bool {
         unsafe { mlirAttributeIsAUnit(attr.raw()) }
     }
 }

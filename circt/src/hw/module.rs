@@ -261,13 +261,13 @@ mod tests {
             |builder, _, inputs, outputs| {
                 let c1 = hw::ConstantOp::build(builder, 1, 1)
                     .unwrap()
-                    .result(0)
+                    .result_at(0)
                     .unwrap();
                 outputs.insert("c1".to_string(), c1);
 
                 let c = comb::AndOp::build(builder, &[inputs["a"], inputs["b"]])
                     .unwrap()
-                    .result(0)
+                    .result_at(0)
                     .unwrap();
 
                 outputs.insert("c".to_string(), c);

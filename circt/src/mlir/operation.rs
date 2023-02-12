@@ -84,7 +84,7 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
     }
 
     /// Returns pos-th result of the operation.
-    fn result(&self, pos: usize) -> Option<Value> {
+    fn result_at(&self, pos: usize) -> Option<Value> {
         Value::try_from_raw(unsafe { mlirOperationGetResult(self.raw(), pos.try_into().unwrap()) })
     }
 

@@ -74,6 +74,17 @@ impl<'a> OpBuilder<'a> {
         self.insert(&op);
         Some(op)
     }
+
+    pub fn build_with_failable<Op: NamedOp>(
+        &mut self,
+        with_fn: impl FnOnce(&mut Self, &mut OperationState) -> Result<(), ()>,
+    ) -> Option<Op> {
+        let mut state = OperationState::new(Op::operation_name(), &self.loc);
+        with_fn(self, &mut state).ok()?;
+        let op: Op = state.build()?;
+        self.insert(&op);
+        Some(op)
+    }
     //// Create a new block after the current one.
     // pub fn add_block(&mut self) -> Block {
     //     let ref_block = self.insert_block.as_ref().expect("insertion block not set");

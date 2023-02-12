@@ -150,9 +150,9 @@ macro_rules! impl_create {
 
 /// Define a type.
 macro_rules! def_type {
-    ($name:ident) => {
+    ($name:ident $(; doc=$doc:tt)?) => {
         paste::paste! {
-            wrap_raw_ptr!($name => MlirType, Clone, Copy);
+            wrap_raw_ptr!($name => MlirType, Clone, Copy $(; doc=$doc)?);
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                     self.format(f)
@@ -170,12 +170,36 @@ macro_rules! def_type {
                     Self::from_raw(value.raw())
                 }
             }
-
-            // impl From<Type> for $name {
-            //     fn from(value: Type) -> Self {
-            //         $name(value.raw())
+            
+            // impl From<&$name> for Type {
+            //     fn from(value: &$name) -> Self {
+            //         Self::from_raw(value.raw())
             //     }
             // }
+
+            impl TryFrom<Type> for $name {
+                type Error = simple_error::SimpleError;
+    
+                fn try_from(value: Type) -> Result<Self, Self::Error> {
+                    paste::paste!{
+                        Self::isa(&value)
+                        .then_some(Self::from_raw(value.raw()))
+                        .ok_or(Self::Error::new(format!("Type {} is not a `{}`", value, stringify!($name))))
+                    }
+                }
+            }
+
+            impl TryFrom<&Type> for $name {
+                type Error = simple_error::SimpleError;
+    
+                fn try_from(value: &Type) -> Result<Self, Self::Error> {
+                    paste::paste!{
+                        Self::isa(&value)
+                        .then_some(Self::from_raw(value.raw()))
+                        .ok_or(Self::Error::new(format!("Type {} is not a `{}`", value, stringify!($name))))
+                    }
+                }
+            }
         }
     };
 }
@@ -197,7 +221,7 @@ macro_rules! def_attr {
                 paste::paste!{
                     Self::isa(&value)
                     .then_some(Self::from_raw(value.raw()))
-                    .ok_or(Self::Error::new(format!("Value is not a `{}`", stringify!($name))))
+                    .ok_or(Self::Error::new(format!("Attribute: {} is not a `{}`", value, stringify!($name))))
                 }
             }
         }
@@ -285,16 +309,48 @@ macro_rules! def_operation {
 macro_rules! def_operation_single_result {
     ($name:ident, $operation_name:expr) => {
         def_operation!($name, $operation_name);
+        impl_op_single_result!($name);
+    };
+}
 
+macro_rules! impl_op_single_result {
+    ($name:ident) => {
         impl $name {
-            pub fn build(builder: &mut crate::OpBuilder, args: impl IntoIterator<Item = impl std::borrow::Borrow<Value>>) -> Option<Self> {
+            pub fn result(&self) -> crate::Value {
+                self.result_at(0).unwrap()
+            }
+        }
+    };
+}
+
+macro_rules! impl_op_build_many_to_one {
+    ($name:ident) => {
+        impl $name {
+            pub fn build(
+                builder: &mut crate::OpBuilder,
+                args: impl IntoIterator<Item = impl std::borrow::Borrow<Value>>,
+            ) -> Option<Self> {
                 builder.build_with(|builder, result| {
-                    // result.add_attribute("twoState", &UnitAttr::new(builder.context()));
-                    result.add_operands(args);
-                    result.add_result(&IntegerType::new(builder.context(), 1));
+                    let mut first_arg = true;
+                    for arg in args.into_iter() {
+                        let arg = arg.borrow();
+                        result.add_operand(arg);
+                        if first_arg {
+                            result.add_result(&arg.ty());
+                            first_arg = false;
+                        }
+                    }
                 })
             }
         }
+    };
+}
+
+macro_rules! def_operation_many_to_one {
+    ($name:ident, $operation_name:expr) => {
+        def_operation!($name, $operation_name);
+        impl_op_build_many_to_one!($name);
+        impl_op_single_result!($name);
     };
 }
 
@@ -326,7 +382,7 @@ macro_rules! def_simple_binary_operation {
                 builder.build_with(|_, result| {
                     result.add_operand(lhs);
                     result.add_operand(rhs);
-                    result.add_result(&lhs.ty().unwrap());
+                    result.add_result(&lhs.ty());
                 })
             }
         }
@@ -341,9 +397,9 @@ macro_rules! def_binary_operation_explicit_result {
         impl $name {
             pub fn build(
                 builder: &mut OpBuilder,
-                ty: &Type,
-                lhs: &Value,
-                rhs: &Value,
+                ty: &impl Ty,
+                lhs: &impl Val,
+                rhs: &impl Val,
             ) -> Option<Self> {
                 builder.build_with(|_, result| {
                     result.add_operand(lhs);

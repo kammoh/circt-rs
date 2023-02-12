@@ -65,8 +65,8 @@ impl<T: IntoOwned> std::ops::Deref for Owned<T> {
 pub type StringRefCallback = unsafe extern "C" fn(MlirStringRef, *mut std::ffi::c_void);
 
 /// for writing or formatting into Unicode-accepting buffers or streams.
-/// The received StringRef *must* be be UTF-8 encoded!
 pub struct FormatterCallback<'a, W: std::fmt::Write + Sized> {
+/// The received StringRef *must* be be UTF-8 encoded!
     user_data: &'a mut W,
     callback: Option<StringRefCallback>,
 }

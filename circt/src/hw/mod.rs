@@ -103,10 +103,6 @@ pub fn get_array_type(element: &Type, size: usize) -> Option<Type> {
     Type::try_from_raw(unsafe { hwArrayTypeGet(element.raw(), size as _) })
 }
 
-/// Get the element type of an array type.
-pub fn array_type_element(ty: Type) -> Option<Type> {
-    Type::try_from_raw(unsafe { hwArrayTypeGetElementType(ty.raw()) })
-}
 
 /// Get the size of an array type.
 pub fn array_type_size(ty: Type) -> usize {

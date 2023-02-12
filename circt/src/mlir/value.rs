@@ -38,8 +38,8 @@ impl Val for Value {
 
 pub trait Val: HasRaw<RawType = MlirValue> {
     /// Return the type of this value.
-    fn ty(&self) -> Option<Type> {
-        Type::try_from_raw(unsafe { mlirValueGetType(self.raw()) })
+    fn ty(&self) -> Type {
+        Type::try_from_raw(unsafe { mlirValueGetType(self.raw()) }).unwrap()
     }
 
     fn first_use(&self) -> Option<OpOperand> {
