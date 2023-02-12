@@ -79,8 +79,8 @@ impl HwModuleOp {
         parameters: &[ParamDeclAttr],
         comment: &str,
     ) -> Option<Self> {
-        let region = Region::new();
-        let block = Block::new();
+        let region = Region::default();
+        let block = Block::default();
         let op: Self = builder
             .build_with(|builder, state| {
                 let ctx = builder.context();
@@ -93,11 +93,11 @@ impl HwModuleOp {
                 state.add_attribute(SymbolTable::symbol_attr_name(), &StringAttr::new(ctx, name));
                 state.add_attribute(
                     "argNames",
-                    &ArrayAttr::new(ctx, port_names(&ctx, inputs.iter())),
+                    &ArrayAttr::new(ctx, port_names(ctx, inputs.iter())),
                 );
                 state.add_attribute(
                     "resultNames",
-                    &ArrayAttr::new(ctx, port_names(&ctx, outputs.iter())),
+                    &ArrayAttr::new(ctx, port_names(ctx, outputs.iter())),
                 );
                 state.add_attribute(
                     "parameters",
@@ -188,10 +188,7 @@ impl PortInfo {
     //     }
     // }
     pub fn is_output(&self) -> bool {
-        match self.direction {
-            PortDirection::Output => true,
-            _ => false,
-        }
+        matches!(self.direction, PortDirection::Output)
     }
 }
 
@@ -207,8 +204,8 @@ impl ModulePortInfo {
             merged_ports
                 .into_iter()
                 .partition_map(|pi| match pi.direction {
-                    PortDirection::Output => Either::Left(pi.clone()),
-                    _ => Either::Right(pi.clone()),
+                    PortDirection::Output => Either::Left(pi),
+                    _ => Either::Right(pi),
                 });
         Self { inputs, outputs }
     }
@@ -227,7 +224,7 @@ mod tests {
     use crate::{hw::ModulePortInfo, *};
     #[test]
     fn test_module_build() {
-        let ctx = OwnedContext::new();
+        let ctx = OwnedContext::default();
         comb::dialect().unwrap().load_dialect(&ctx).unwrap();
         seq::dialect().unwrap().load_dialect(&ctx).unwrap();
         hw::dialect().unwrap().load_dialect(&ctx).unwrap();

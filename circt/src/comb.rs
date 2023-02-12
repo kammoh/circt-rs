@@ -185,12 +185,14 @@ pub(crate) fn trunc_or_zext(
     let target_width: u32 = type_width(into_ty).ok()?.try_into().ok()?;
     let ty = IntegerType::try_from(index.ty()).ok()?;
     let actual_width = ty.width();
-    if target_width < actual_width {
-        ExtractOp::with_sizes(builder, index, 0, target_width as _)?.result_at(0)
-    } else if target_width > actual_width {
-        let zero = hw::ConstantOp::build(builder, target_width - actual_width, 0)?.result();
-        ConcatOp::build(builder, [zero, index.clone()].iter().cloned())?.result_at(0)
-    } else {
-        Some(index.clone())
+    match target_width.cmp(&actual_width) {
+        std::cmp::Ordering::Less => {
+            ExtractOp::with_sizes(builder, index, 0, target_width as _)?.result_at(0)
+        }
+        std::cmp::Ordering::Greater => {
+            let zero = hw::ConstantOp::build(builder, target_width - actual_width, 0)?.result();
+            ConcatOp::build(builder, [zero, index.clone()].iter().cloned())?.result_at(0)
+        }
+        std::cmp::Ordering::Equal => Some(index.clone()),
     }
 }

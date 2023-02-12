@@ -1,5 +1,4 @@
 use cargo_emit::{rerun_if_changed, rustc_link_lib, rustc_link_search, warning};
-use cmake;
 
 use std::{
     collections::HashMap,
@@ -40,7 +39,7 @@ fn main() {
     if build_circt {
         warning!("Checking out git submodule...");
         Command::new("git")
-            .args(&[
+            .args([
                 "submodule",
                 "update",
                 "--init",
@@ -63,25 +62,25 @@ fn main() {
                 .current_dir(circt_src_dir)
                 .envs(&env)
                 .spawn()
-                .expect(format!("Failed to run script: {sh_script}").as_str());
+                .unwrap_or_else(|_| panic!("Failed to run script: {sh_script}"));
             child
                 .stdin
                 .as_mut()
                 .unwrap()
                 .write_all("yes".as_bytes())
-                .expect(format!("Failed write `yes` to stdin of script: {sh_script}").as_str());
+                .unwrap_or_else(|_| panic!("Failed write `yes` to stdin of script: {sh_script}"));
             assert!(child
                 .wait()
-                .expect(format!("Failed wait for script: {sh_script}").as_str())
+                .unwrap_or_else(|_| panic!("Failed wait for script: {sh_script}"))
                 .success());
         }
         warning!("Done building dependencies!");
 
         warning!("Building LLVM... (this could take a long time!)");
         if !&circt_install_dir.exists() {
-            std::fs::create_dir_all(&circt_install_dir).unwrap();
+            std::fs::create_dir_all(circt_install_dir).unwrap();
         }
-        cmake::Config::new(&llvm_src_dir)
+        cmake::Config::new(llvm_src_dir)
             .define("LLVM_TARGETS_TO_BUILD", "host")
             .define("LLVM_ENABLE_PROJECTS", "mlir")
             .define("LLVM_EXTERNAL_PROJECTS", "circt")
@@ -92,7 +91,7 @@ fn main() {
             .define("CIRCT_BINDINGS_PYTHON_ENABLED", "ON")
             .define("CIRCT_ENABLE_FRONTENDS", "PyCDE")
             .define("CMAKE_BUILD_TYPE", build_type)
-            .out_dir(&circt_install_dir)
+            .out_dir(circt_install_dir)
             .generator(generator)
             .build();
     };
@@ -200,8 +199,7 @@ fn main() {
         rustc_link_lib!(lib => "static");
     }
     let os = env::var_os("CARGO_CFG_TARGET_OS")
-        .map(|s| s.into_string().ok())
-        .flatten()
+        .and_then(|s| s.into_string().ok())
         .unwrap_or_default();
 
     match os.as_str() {

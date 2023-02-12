@@ -43,8 +43,6 @@ impl ArrayType {
     pub fn element_type(&self) -> Option<Type> {
         Type::try_from_raw(
             unsafe { hwArrayTypeGetElementType(self.raw()) }
-                .try_into()
-                .unwrap(),
         )
     }
 }

@@ -134,6 +134,6 @@ pub fn struct_type_field(ty: Type, offset: usize) -> (String, Type) {
 /// Get an iterator over the fields of a struct type.
 pub fn struct_type_fields(ty: Type) -> Vec<(String, Type)> {
     (0..struct_type_size(ty))
-        .map(|i| struct_type_field(ty, i).clone())
+        .map(|i| struct_type_field(ty, i))
         .collect()
 }

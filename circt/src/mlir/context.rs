@@ -13,8 +13,6 @@ wrap_raw_ptr!(Context);
 // pub type OwnedContext = Owned<Context>;
 
 impl Context {
-
-
     /// Get an interned identifier.
     pub fn get_identifier(&self, ident: &str) -> MlirIdentifier {
         let string_ref = StringRef::from_str(ident);
@@ -80,20 +78,8 @@ impl Context {
 impl_create!(Context);
 impl_into_owned!(Context);
 
-impl Owned<Context> {
-    pub fn new() -> Self {
+impl Default for Owned<Context> {
+    fn default() -> Self {
         Self(Context::create().unwrap())
     }
 }
-// impl Owned<Context> {
-//     /// Create a new MLIR context.
-//     pub fn new() -> Self {
-//         Self(Context::from_raw(unsafe { mlirContextCreate() }))
-//     }
-// }
-
-// impl IntoOwned for Context {
-//     fn destroy(&mut self) {
-//         unsafe { mlirContextDestroy(self.0) }
-//     }
-// }

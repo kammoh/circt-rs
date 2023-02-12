@@ -192,7 +192,7 @@ mod tests {
     use super::*;
     #[test]
     fn print_type() {
-        let ctx = OwnedContext::new();
+        let ctx = OwnedContext::default();
         let i8 = IntegerType::new(&ctx, 8);
         let my_i1 = IntegerType::new(&ctx, 1);
         assert_eq!(i8.to_string(), "i8");

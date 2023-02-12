@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn test_pm() {
-        let ctx = OwnedContext::new();
+        let ctx = OwnedContext::default();
         let pm = PassManager::new(&ctx);
         hw::dialect().unwrap().load_dialect(&ctx).unwrap();
         hw::register_hw_arith_passes();

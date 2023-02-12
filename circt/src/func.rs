@@ -2,7 +2,6 @@
 // Copyright (c) 2022-2023 Kamyar Mohajerani
 
 use crate::crate_prelude::*;
-use circt_sys::*;
 
 define_dialect!(func);
 
@@ -63,9 +62,9 @@ impl<'a> FunctionBuilder<'a> {
                 let ctx = builder.context();
                 let arg_types = self.args.iter().map(|(_, ty)| ty.clone());
                 let result_types = self.results.iter().map(|(_, ty)| ty.clone());
-                let mlir_arg_types: Vec<MlirType> = arg_types.clone().map(|x| x.raw()).collect();
-                let mlir_result_types: Vec<MlirType> =
-                    result_types.clone().map(|x| x.raw()).collect();
+                // let mlir_arg_types: Vec<MlirType> = arg_types.clone().map(|x| x.raw()).collect();
+                // let mlir_result_types: Vec<MlirType> =
+                //     result_types.clone().map(|x| x.raw()).collect();
                 let arg_names: Vec<_> = self
                     .args
                     .iter()
@@ -78,9 +77,9 @@ impl<'a> FunctionBuilder<'a> {
                     &TypeAttr::new(&ctx.get_function_type(arg_types, result_types).unwrap()),
                 );
                 state.add_attribute("arg_names", &ArrayAttr::new(ctx, arg_names));
-                let region = Region::new();
-                let locations = vec![Location::new_unknown(ctx); mlir_arg_types.len()];
-                let block = Block::new();
+                let region = Region::default();
+                // let locations = vec![Location::new_unknown(ctx); mlir_arg_types.len()];
+                let block = Block::default();
                 region.append_block(&block);
 
                 state.add_region(&region);

@@ -330,7 +330,7 @@ macro_rules! impl_op_build_many_to_one {
                 builder: &mut crate::OpBuilder,
                 args: impl IntoIterator<Item = impl std::borrow::Borrow<Value>>,
             ) -> Option<Self> {
-                builder.build_with(|builder, result| {
+                builder.build_with(|_, result| {
                     let mut first_arg = true;
                     for arg in args.into_iter() {
                         let arg = arg.borrow();

@@ -20,10 +20,6 @@ impl Block {
         })
     }
 
-    pub fn new() -> Self {
-        Self::create(&[]).unwrap()
-    }
-
     /// Returns the region that contains this block.
     pub fn parent_region(&self) -> Option<Region> {
         Region::try_from_raw(unsafe { mlirBlockGetParentRegion(self.raw()) })
@@ -112,6 +108,13 @@ impl Block {
     }
 }
 
+impl Default for Block {
+    /// Creates a new empty block with no arguments and transfers ownership to the caller.
+    fn default() -> Self {
+        Self::create(&[]).unwrap()
+    }
+}
+
 impl PartialEq for Block {
     fn eq(&self, other: &Self) -> bool {
         unsafe { mlirBlockEqual(self.0, other.0) }
@@ -128,11 +131,6 @@ wrap_raw_ptr!(Region);
 impl_into_owned!(Region);
 
 impl Region {
-    /// Creates a new empty region and transfers ownership to the caller.
-    pub fn new() -> Self {
-        Self::try_from_raw(unsafe { mlirRegionCreate() }).unwrap()
-    }
-
     /// Takes a block owned by the caller and inserts it after the (non-owned) reference block in this region.
     /// The reference block must belong to this region.
     pub fn insert_block_after(&self, reference: &Block, block: &Block) {
@@ -181,6 +179,13 @@ impl Region {
     /// Returns the region immediately following the given region in its parent operation.
     pub fn next(&self) -> Option<Self> {
         Self::try_from_raw(unsafe { mlirRegionGetNextInOperation(self.raw()) })
+    }
+}
+
+impl Default for Region {
+    /// Creates a new empty region and transfers ownership to the caller.
+    fn default() -> Self {
+        Self::try_from_raw(unsafe { mlirRegionCreate() }).unwrap()
     }
 }
 

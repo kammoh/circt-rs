@@ -5,7 +5,7 @@
 
 use crate::crate_prelude::*;
 use circt_sys::*;
-use num::{BigInt, Num};
+use num::Num;
 use std::{
     borrow::Borrow,
     fmt::{Debug, Display},
@@ -40,7 +40,7 @@ impl Display for Attribute {
 
 impl Debug for Attribute {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self)
     }
 }
 
@@ -159,7 +159,8 @@ impl IntegerAttr {
     pub fn from_str(ty: &impl Ty, value: &str) -> Self {
         Self::try_from_raw(unsafe {
             mlirIntegerAttrGetFromString(ty.raw(), StringRef::from_str(value).raw())
-        }).unwrap()
+        })
+        .unwrap()
     }
 
     /// Creates an integer attribute of the given type by parsing the given string into an integer value.

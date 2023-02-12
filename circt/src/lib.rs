@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn register_hw() {
-        let ctx = OwnedContext::new();
+        let ctx = OwnedContext::default();
         assert_eq!(ctx.num_loaded_dialects(), 1);
 
         let hw_handle = hw::dialect().unwrap();
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn hw_types() {
-        let ctx = OwnedContext::new();
+        let ctx = OwnedContext::default();
         assert_eq!(ctx.num_loaded_dialects(), 1);
 
         let hw_handle = hw::dialect().unwrap();
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn test_pm() {
-        let ctx = OwnedContext::new();
+        let ctx = OwnedContext::default();
         let pm = PassManager::new(&ctx);
         hw::dialect().unwrap().load_dialect(&ctx).unwrap();
         hw::register_hw_arith_passes();

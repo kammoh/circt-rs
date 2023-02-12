@@ -80,7 +80,7 @@ where
             msg: MlirStringRef,
             use_data: *mut std::ffi::c_void,
         ) {
-            let f: &mut T = std::mem::transmute(use_data);
+            let f: &mut T = &mut *(use_data as *mut T);
             let msg = StringRef::try_from_raw(msg).unwrap();
             f.write_str(msg.as_str()).unwrap();
         }
@@ -115,7 +115,7 @@ where
             msg: MlirStringRef,
             use_data: *mut std::ffi::c_void,
         ) {
-            let f: &mut T = std::mem::transmute(use_data);
+            let f: &mut T = &mut *(use_data as *mut T);
             let msg = StringRef::try_from_raw(msg).unwrap();
             f.write_all(msg.as_bytes()).unwrap();
             f.flush().unwrap();

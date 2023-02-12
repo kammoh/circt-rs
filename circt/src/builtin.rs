@@ -12,8 +12,8 @@ impl SingleBlockOp for ModuleOp {}
 
 impl ModuleOp {
     pub fn build(builder: &mut OpBuilder) -> Option<Self> {
-        let region = Region::new();
-        let block = Block::new();
+        let region = Region::default();
+        let block = Block::default();
         builder.build_with(|_, state| {
             region.append_block(&block);
             state.add_region(&region)

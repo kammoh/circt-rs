@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_print_op() {
-        let ctx = OwnedContext::new();
+        let ctx = OwnedContext::default();
         let loc = Location::new_unknown(&ctx);
         let mut state = OperationState::new(hw::ConstantOp::operation_name(), &loc);
         let op: hw::ConstantOp = state.build().unwrap();
