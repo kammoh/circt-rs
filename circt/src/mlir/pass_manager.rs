@@ -15,7 +15,6 @@ impl LogicalResult {
     }
 }
 
-
 wrap_raw_ptr!(OpPassManager);
 
 impl OpPassManager {
@@ -34,7 +33,7 @@ impl OpPassManager {
     }
 
     /// Parse a sequence of textual MLIR pass pipeline elements and add them to this OpPassManager.
-    pub fn add(&self, pipeline: &str) -> Result<(), SimpleError> {
+    pub fn add_pipeline(&self, pipeline: &str) -> Result<(), SimpleError> {
         let pipeline = StringRef::from_str(pipeline);
 
         let mut err = String::new();
@@ -45,6 +44,13 @@ impl OpPassManager {
         .to_option(())
         .ok_or(SimpleError::new(err))
     }
+
+    /// Add a pass and transfer ownership to the provided mlirOpPassManager.
+    /// If the pass is not a generic operation pass or matching the type of the provided PassManager,
+    ///  a new OpPassManager is implicitly nested under the provided PassManager.
+    pub fn add_pass(&self, pass: &Pass) {
+        unsafe { mlirOpPassManagerAddOwnedPass(self.raw(), pass.raw()) }
+    }
 }
 
 wrap_raw_ptr!(PassManager);
@@ -54,6 +60,13 @@ impl PassManager {
     /// Create a new top-level PassManager with the default anchor.
     pub fn new(ctx: &Context) -> Self {
         Self::try_from_raw(unsafe { mlirPassManagerCreate(ctx.raw()) }).unwrap()
+    }
+
+    /// Add a pass and transfer ownership to the provided top-level mlirPassManager.
+    /// If the pass is not a generic operation pass or a ModulePass, a new OpPassManager is
+    ///  implicitly nested under the provided PassManager.
+    pub fn add_pass(&self, pass: &Pass) {
+        unsafe { mlirPassManagerAddOwnedPass(self.raw(), pass.raw()) }
     }
 
     /// Enable mlir-print-ir-after-all.
@@ -80,25 +93,19 @@ impl PassManager {
     }
 
     /// Parse a sequence of textual MLIR pass pipeline elements and add them to self.
-    pub fn add(&self, pipeline: &str) -> Result<(), SimpleError> {
+    pub fn add_pipeline(&self, pipeline: &str) -> Result<(), SimpleError> {
         let pm =
             OpPassManager::try_from_raw(unsafe { mlirPassManagerGetAsOpPassManager(self.raw()) })
                 .ok_or(SimpleError::new("failed"))?;
-        pm.add(pipeline)
+        pm.add_pipeline(pipeline)
     }
 }
 
-// impl Drop for PassManager {
-//     fn drop(&mut self) {
-//         println!("drop PassManager");
-//         if !self.0.ptr.is_null() {
-//             self.destroy();
-//             self.0 = MlirPassManager {
-//                 ptr: std::ptr::null_mut(),
-//             }
-//         }
-//     }
-// }
+impl Owned<PassManager> {
+    pub fn new(ctx: &Context) -> Self {
+        Self(PassManager::new(ctx))
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -113,13 +120,12 @@ mod tests {
         let ctx = OwnedContext::default();
         let pm = PassManager::new(&ctx);
         hw::dialect().unwrap().load_dialect(&ctx).unwrap();
-        hw::register_hw_arith_passes();
+        hw::register_arith_passes();
         pm.parse("asdfasdfasf").expect_err("should fail");
         pm.parse("builtin.module(lower-hwarith-to-hw)")
             .expect("should succeed");
 
         let loc = Location::new_unknown(&ctx);
-
 
         let module = Module::create(&loc);
         for pipeline in &["builtin.module(lower-hwarith-to-hw)"] {

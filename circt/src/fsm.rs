@@ -4,6 +4,6 @@ use circt_sys::registerFSMPasses;
 
 define_dialect!(fsm);
 
-pub fn register_fsm_passes() {
+pub fn register_passes() {
     unsafe { registerFSMPasses() }
 }

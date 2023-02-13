@@ -10,6 +10,7 @@ cached = "0.42.0"
 circt-sys = {path = "../circt-sys"}
 itertools = "0.10.5"
 lazy_static = "1.4.0"
+miette = { version = "5.5.0", features = ["fancy"] }
 num = { version = "0.4.0", features = ["num-bigint"] }
 paste = "1.0.11"
 quote = "1.0.23"

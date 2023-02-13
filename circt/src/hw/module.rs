@@ -230,10 +230,13 @@ mod tests {
         hw::dialect().unwrap().load_dialect(&ctx).unwrap();
         fsm::dialect().unwrap().load_dialect(&ctx).unwrap();
         sv::dialect().unwrap().load_dialect(&ctx).unwrap();
-        seq::register_seq_passes();
-        hw::register_hw_arith_passes();
-        fsm::register_fsm_passes();
-        sv::register_sv_passes();
+        seq::register_passes();
+        hw::register_passes();
+        hw::register_arith_passes();
+        fsm::register_passes();
+        sv::register_passes();
+        transforms::register_cse();
+        transforms::register_canonicalizer();
 
         let mut builder = OpBuilder::new(&ctx);
         let module = Module::create(builder.loc());
@@ -276,14 +279,14 @@ mod tests {
 
         assert!(hw_module.verify(), "hw_module verify failed");
 
-        let pm = PassManager::new(&ctx);
+        let pm = OwnedPassManager::new(&ctx);
 
         let passes = vec![
             "builtin.module(lower-hwarith-to-hw)",
             "builtin.module(hw.module(lower-seq-hlmem))",
             "builtin.module(convert-fsm-to-sv)",
             "builtin.module(lower-seq-to-sv)",
-            // "builtin.module(cse, canonicalize, cse)",
+            "builtin.module(cse, canonicalize, cse)",
             "builtin.module(hw.module(prettify-verilog), hw.module(hw-cleanup))",
         ];
 

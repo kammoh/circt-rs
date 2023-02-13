@@ -1,11 +1,12 @@
 use cargo_emit::{rerun_if_changed, rustc_link_lib, rustc_link_search, warning};
 
+use miette::{Result, IntoDiagnostic};
+
 use std::{
     collections::HashMap,
     env,
-    io::Write,
     path::Path,
-    process::{Command, Stdio},
+    process::{Command, Stdio}, io::Write,
 };
 
 static CIRCT_DEP_SCRIPTS: [&str; 2] = [
@@ -14,9 +15,14 @@ static CIRCT_DEP_SCRIPTS: [&str; 2] = [
     "utils/get-or-tools.sh",
 ];
 
-fn main() {
+fn main() -> Result<()> {
     rerun_if_changed!("build.rs");
     // rerun_if_changed!("Cargo.lock"); // for some reason reruns build every time!
+
+    let cargo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    let lib_src = cargo_root.join("src/lib.rs");
+    rerun_if_changed!(lib_src.to_str().unwrap());
 
     let build_circt = env::var("BUILD_CIRCT")
         .ok()
@@ -25,14 +31,14 @@ fn main() {
     let build_type = std::env::var("CIRCT_BUILD_TYPE").unwrap_or("Release".to_string());
     let generator = std::env::var("CMAKE_GENERATOR").unwrap_or("Ninja".to_string());
 
-    let cargo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let circt_src_dir = &cargo_root.join("circt");
     let circt_install_dir = &cargo_root.join("circt_build");
     let llvm_src_dir = &circt_src_dir.join("llvm/llvm");
 
     let include_dir = &circt_install_dir.join("include");
     let lib_dir = &circt_install_dir.join("lib");
-    let bindings_dir = &circt_install_dir;
+    let bindings_dir = cargo_root.join("bindings");
+    std::fs::create_dir_all(&bindings_dir).into_diagnostic()?;
 
     let num_jobs = num_cpus::get();
 
@@ -78,7 +84,7 @@ fn main() {
 
         warning!("Building LLVM... (this could take a long time!)");
         if !&circt_install_dir.exists() {
-            std::fs::create_dir_all(circt_install_dir).unwrap();
+            std::fs::create_dir_all(circt_install_dir).into_diagnostic()?;
         }
         cmake::Config::new(llvm_src_dir)
             .define("LLVM_TARGETS_TO_BUILD", "host")
@@ -91,6 +97,7 @@ fn main() {
             .define("CIRCT_BINDINGS_PYTHON_ENABLED", "ON")
             .define("CIRCT_ENABLE_FRONTENDS", "PyCDE")
             .define("CMAKE_BUILD_TYPE", build_type)
+            .define("ENABLE_LTO", "ON")
             .out_dir(circt_install_dir)
             .generator(generator)
             .build();
@@ -137,6 +144,8 @@ fn main() {
         "MLIRSideEffectInterfaces",
         "MLIRTransformUtils",
         "MLIRTransforms",
+        "MLIRFuncTransforms",
+        "MLIRAffineTransforms",
         "MLIRArithTransforms",
         "MLIRArithUtils",
         "MLIRArithToLLVM",
@@ -145,6 +154,7 @@ fn main() {
         "MLIRAffineUtils",
         "MLIRAffineTransformOps",
         "MLIRAffineDialect",
+        "MLIRRuntimeVerifiableOpInterface",
         // "MLIRTensorDialect",
         // "MLIRCAPITensor",
         // "MLIRSparseTensorDialect",
@@ -165,13 +175,19 @@ fn main() {
         // "MLIRBufferizationToMemRef",
         // "MLIRMemRefUtils",
         "CIRCTSupport",
+        "CIRCTTransforms",
         "CIRCTHW",
         "CIRCTCAPIHWArith",
         "CIRCTHWArith",
         "CIRCTHWArithToHW",
-        "CIRCTCAPIComb",
+        "CIRCTPipelineToHW",
         "CIRCTCAPIHW",
+        "CIRCTHWTransforms",
+        "CIRCTHWToLLVM",
+        "CIRCTHandshakeToHW",
+        "CIRCTCAPIComb",
         "CIRCTComb",
+        "CIRCTCombToLLVM",
         "CIRCTSeq",
         "CIRCTCAPISeq",
         "CIRCTSeqTransforms",
@@ -194,6 +210,7 @@ fn main() {
         "CIRCTExportChiselInterface",
         "CIRCTFIRRTLToHW",
         "CIRCTFIRRTLTransforms",
+        "MLIRTransforms",
     ];
     for lib in lib_names {
         rustc_link_lib!(lib => "static");
@@ -240,22 +257,31 @@ fn main() {
 
     bindgen::Builder::default()
         .header("wrapper.h")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate_block(true)
         .clang_args(&["-I", include_dir.to_str().unwrap()])
         .generate()
         .expect("Unable to generate bindings")
-        .write_to_file(bindings_dir.join("bindings.rs"))
+        .write_to_file(&bindings_dir.join("bindings.rs"))
         .expect("Couldn't write bindings!");
+
+    let cpp_std = "-std=c++17";
 
     // Additional wrapper code
     rerun_if_changed!("wrapper.cpp");
     cc::Build::new()
         .cpp(true)
         .file("wrapper.cpp")
-        .flag_if_supported("-std=c++17")
+        .flag_if_supported(cpp_std)
         .include(include_dir)
         .warnings(false)
         .extra_warnings(false)
         .compile("circt-sys-wrapper");
+
+    let mut b = autocxx_build::Builder::new(lib_src, &[include_dir, cargo_root])
+        .extra_clang_args(&[cpp_std])
+        .custom_gendir(bindings_dir)
+        .build()?;
+    b.flag(cpp_std).warnings(false).compile("autocxx");
+
+    Ok(())
 }

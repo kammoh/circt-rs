@@ -9,8 +9,10 @@ pub mod location;
 pub mod module;
 pub mod operation;
 pub mod pass_manager;
+pub mod passes;
 pub mod string;
 pub mod symbol;
+pub mod transforms;
 pub mod ty;
 pub mod value;
 
@@ -23,6 +25,7 @@ pub use location::*;
 pub use module::*;
 pub use operation::*;
 pub use pass_manager::*;
+pub use passes::*;
 pub use string::*;
 pub use symbol::*;
 pub use ty::*;
@@ -50,8 +53,7 @@ pub trait IntoOwned {
 
 impl<T: IntoOwned> Drop for Owned<T> {
     fn drop(&mut self) {
-        println!("Dropping ...");
-        // self.0.destroy()
+        self.0.destroy()
     }
 }
 
@@ -66,7 +68,7 @@ pub type StringRefCallback = unsafe extern "C" fn(MlirStringRef, *mut std::ffi::
 
 /// for writing or formatting into Unicode-accepting buffers or streams.
 pub struct FormatterCallback<'a, W: std::fmt::Write + Sized> {
-/// The received StringRef *must* be be UTF-8 encoded!
+    /// The received StringRef *must* be be UTF-8 encoded!
     user_data: &'a mut W,
     callback: Option<StringRefCallback>,
 }

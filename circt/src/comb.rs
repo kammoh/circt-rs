@@ -1,11 +1,10 @@
 // Copyright (c) 2016-2021 Fabian Schuiki
 // Copyright (c) 2022-2023 Kamyar Mohajerani
 
-use std::borrow::Borrow;
-
-use simple_error::SimpleError;
-
 use crate::crate_prelude::*;
+use circt_sys::cxx_bindings;
+use simple_error::SimpleError;
+use std::borrow::Borrow;
 
 define_dialect!(comb);
 

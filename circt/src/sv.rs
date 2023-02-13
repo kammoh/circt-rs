@@ -4,6 +4,6 @@ use circt_sys::registerSVPasses;
 
 define_dialect!(sv);
 
-pub fn register_sv_passes() {
+pub fn register_passes() {
     unsafe { registerSVPasses() }
 }

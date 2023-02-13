@@ -2,6 +2,6 @@
 
 define_dialect!(seq);
 
-pub fn register_seq_passes() {
+pub fn register_passes() {
     unsafe { circt_sys::registerSeqPasses() }
 }

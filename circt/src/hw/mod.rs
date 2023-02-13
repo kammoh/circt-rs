@@ -17,8 +17,12 @@ use std::convert::TryInto;
 
 define_dialect!(hw);
 
-pub fn register_hw_arith_passes() {
+pub fn register_arith_passes() {
     unsafe { registerHWArithPasses() }
+}
+
+pub fn register_passes() {
+    unsafe { cxx_bindings::circt::hw::registerPasses() }
 }
 
 /// Creates an HW inout type in the context associated with element.
@@ -102,7 +106,6 @@ pub fn alias_type_get_name(ty: Type) -> Option<String> {
 pub fn get_array_type(element: &Type, size: usize) -> Option<Type> {
     Type::try_from_raw(unsafe { hwArrayTypeGet(element.raw(), size as _) })
 }
-
 
 /// Get the size of an array type.
 pub fn array_type_size(ty: Type) -> usize {

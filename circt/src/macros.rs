@@ -64,6 +64,7 @@ macro_rules! impl_has_raw {
 
         impl$(<$lt>)? AsRef<circt_sys::$inner> for $name$(<$lt>)? {
             fn as_ref(&self) -> &circt_sys::$inner {
+                use crate::wrap_raw::HasRaw;
                 self.raw_ref()
             }
         }
