@@ -11,7 +11,7 @@ impl DialectHandle {
         unsafe { mlirDialectHandleRegisterDialect(self.raw(), ctx.raw()) }
     }
 
-    pub fn load_dialect(&self, ctx: &Context) -> Option<Dialect> {
+    pub fn load(&self, ctx: &Context) -> Option<Dialect> {
         self.register_dialect(ctx);
         Dialect::try_from_raw(unsafe { mlirDialectHandleLoadDialect(self.raw(), ctx.raw()) })
     }

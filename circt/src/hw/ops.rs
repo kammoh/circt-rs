@@ -17,7 +17,7 @@ impl ConstantOp {
         builder: &mut OpBuilder,
         width: u32,
         value: impl Num + std::fmt::Display,
-    ) -> Option<Self> {
+    ) -> Self {
         builder.build_with(|builder, state| {
             let ty = IntegerType::new(builder.context(), width);
             state.add_attribute(
@@ -25,7 +25,7 @@ impl ConstantOp {
                 &IntegerAttr::from_str(&ty, value.to_string().as_str()),
             );
             state.add_result(&ty);
-        })
+        }).unwrap()
     }
 }
 
@@ -110,7 +110,6 @@ impl ArraySliceOp {
         length: usize,
     ) -> Self {
         let offset = crate::hw::ConstantOp::build(builder, 64, offset)
-            .unwrap()
             .result();
         Self::with_sizes(builder, value, &offset, length).unwrap()
     }
@@ -149,7 +148,6 @@ impl ArrayGetOp {
 
     pub fn with_const_offset(builder: &mut OpBuilder, value: &Value, offset: usize) -> Self {
         let offset = crate::hw::ConstantOp::build(builder, 64, offset)
-            .unwrap()
             .result();
         Self::build(builder, value, &offset)
     }

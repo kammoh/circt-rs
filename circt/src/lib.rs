@@ -61,15 +61,15 @@ mod tests {
         let ctx = OwnedContext::default();
         assert_eq!(ctx.num_loaded_dialects(), 1);
 
-        let hw_handle = hw::dialect().unwrap();
-        let hw = hw_handle.load_dialect(&ctx).unwrap();
-        let hw2 = hw_handle.load_dialect(&ctx).unwrap();
+        let hw_handle = hw::dialect();
+        let hw = hw_handle.load(&ctx).unwrap();
+        let hw2 = hw_handle.load(&ctx).unwrap();
         assert_eq!(ctx.num_loaded_dialects(), 2);
         assert_eq!(hw, hw2);
 
-        let seq_handle = seq::dialect().unwrap();
-        let seq = seq_handle.load_dialect(&ctx).unwrap();
-        let seq2 = seq_handle.load_dialect(&ctx).unwrap();
+        let seq_handle = seq::dialect();
+        let seq = seq_handle.load(&ctx).unwrap();
+        let seq2 = seq_handle.load(&ctx).unwrap();
         assert_eq!(ctx.num_loaded_dialects(), 3);
         assert_eq!(seq, seq2);
 
@@ -82,8 +82,8 @@ mod tests {
         let ctx = OwnedContext::default();
         assert_eq!(ctx.num_loaded_dialects(), 1);
 
-        let hw_handle = hw::dialect().unwrap();
-        let _ = hw_handle.load_dialect(&ctx).unwrap();
+        let hw_handle = hw::dialect();
+        let _ = hw_handle.load(&ctx).unwrap();
 
         let i8_type = ctx.get_integer_type(8).unwrap();
         let i8_io_type = hw::get_inout_type(i8_type).unwrap();

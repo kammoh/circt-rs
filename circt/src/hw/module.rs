@@ -221,15 +221,15 @@ impl ModulePortInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::{hw::ModulePortInfo, *};
+    use crate::{hw::ModulePortInfo, seq::CompRegOp, *};
     #[test]
     fn test_module_build() {
         let ctx = OwnedContext::default();
-        comb::dialect().unwrap().load_dialect(&ctx).unwrap();
-        seq::dialect().unwrap().load_dialect(&ctx).unwrap();
-        hw::dialect().unwrap().load_dialect(&ctx).unwrap();
-        fsm::dialect().unwrap().load_dialect(&ctx).unwrap();
-        sv::dialect().unwrap().load_dialect(&ctx).unwrap();
+        comb::dialect().load(&ctx).unwrap();
+        seq::dialect().load(&ctx).unwrap();
+        hw::dialect().load(&ctx).unwrap();
+        fsm::dialect().load(&ctx).unwrap();
+        sv::dialect().load(&ctx).unwrap();
         seq::register_passes();
         hw::register_passes();
         hw::register_arith_passes();
@@ -248,6 +248,7 @@ mod tests {
 
         ports.add_input("a", &i1);
         ports.add_input("b", &i1);
+        ports.add_input("clk", &i1);
         ports.add_output("c", &i1);
         ports.add_output("c1", &i1);
 
@@ -259,18 +260,19 @@ mod tests {
             &[],
             "no comments!",
             |builder, _, inputs, outputs| {
-                let c1 = hw::ConstantOp::build(builder, 1, 1)
-                    .unwrap()
-                    .result_at(0)
-                    .unwrap();
+                let c1 = hw::ConstantOp::build(builder, 1, 1).result();
                 outputs.insert("c1".to_string(), c1);
 
-                let c = comb::AndOp::build(builder, &[inputs["a"], inputs["b"]])
+                let a_and_b = comb::AndOp::build(builder, &[inputs["a"], inputs["b"]])
                     .unwrap()
-                    .result_at(0)
-                    .unwrap();
+                    .result();
 
-                outputs.insert("c".to_string(), c);
+                let c_reg =
+                    CompRegOp::build(builder, "c_reg", &a_and_b, &inputs["clk"], None, None)
+                        .unwrap()
+                        .result();
+
+                outputs.insert("c".to_string(), c_reg);
             },
         )
         .unwrap();
@@ -302,6 +304,5 @@ mod tests {
         let out_dir = Path::new(hw_module_name);
         std::fs::create_dir_all(out_dir).unwrap();
         export_split_verilog(&module, &out_dir);
-
     }
 }

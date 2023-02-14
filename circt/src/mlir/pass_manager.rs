@@ -119,7 +119,7 @@ mod tests {
     fn test_pm() {
         let ctx = OwnedContext::default();
         let pm = PassManager::new(&ctx);
-        hw::dialect().unwrap().load_dialect(&ctx).unwrap();
+        hw::dialect().load(&ctx).unwrap();
         hw::register_arith_passes();
         pm.parse("asdfasdfasf").expect_err("should fail");
         pm.parse("builtin.module(lower-hwarith-to-hw)")

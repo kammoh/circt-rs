@@ -64,8 +64,8 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
     }
 
     /// Returns the number of operands of the operation.
-    fn num_operands(&self) -> isize {
-        unsafe { mlirOperationGetNumOperands(self.raw()) }
+    fn num_operands(&self) -> usize {
+        unsafe { mlirOperationGetNumOperands(self.raw()) as _ }
     }
 
     /// Returns pos-th operand of the operation.
@@ -74,7 +74,7 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
     }
 
     /// Sets the pos-th operand of the operation.
-    fn set_operand(&self, pos: usize, new_value: Value) {
+    fn set_operand(&self, pos: usize, new_value: &Value) {
         unsafe { mlirOperationSetOperand(self.raw(), pos.try_into().unwrap(), new_value.raw()) }
     }
 

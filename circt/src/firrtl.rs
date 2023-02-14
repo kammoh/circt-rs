@@ -15,9 +15,9 @@ mod tests {
     #[test]
     fn test_firrtl() -> miette::Result<()> {
         let ctx = OwnedContext::default();
-        let firrtl_handle = firrtl::dialect().unwrap();
+        let firrtl_handle = firrtl::dialect();
         firrtl_handle
-            .load_dialect(&ctx)
+            .load(&ctx)
             .expect("failed to load FIRRTL dialect");
         assert!(ctx.num_loaded_dialects() >= 2);
         Ok(())

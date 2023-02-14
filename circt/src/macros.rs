@@ -3,9 +3,9 @@
 macro_rules! define_dialect {
     ($name:ident) => {
         paste::paste!{
-            pub fn dialect() -> Option<super::mlir::DialectHandle> {
+            pub fn dialect() -> crate::mlir::DialectHandle {
                 use crate::WrapRawPtr;
-                super::mlir::DialectHandle::try_from_raw(unsafe { circt_sys::[< mlirGetDialectHandle__ $name __>]() })
+                super::mlir::DialectHandle::try_from_raw(unsafe { circt_sys::[< mlirGetDialectHandle__ $name __>]() }).unwrap()
             }
             pub fn get_namespace() {}
         }
@@ -171,7 +171,7 @@ macro_rules! def_type {
                     Self::from_raw(value.raw())
                 }
             }
-            
+
             // impl From<&$name> for Type {
             //     fn from(value: &$name) -> Self {
             //         Self::from_raw(value.raw())
@@ -180,7 +180,7 @@ macro_rules! def_type {
 
             impl TryFrom<Type> for $name {
                 type Error = simple_error::SimpleError;
-    
+
                 fn try_from(value: Type) -> Result<Self, Self::Error> {
                     paste::paste!{
                         Self::isa(&value)
@@ -192,7 +192,7 @@ macro_rules! def_type {
 
             impl TryFrom<&Type> for $name {
                 type Error = simple_error::SimpleError;
-    
+
                 fn try_from(value: &Type) -> Result<Self, Self::Error> {
                     paste::paste!{
                         Self::isa(&value)
@@ -279,12 +279,13 @@ macro_rules! def_operation {
     ($name:ident, $operation_name:expr $(; doc=$doc:tt)?) => {
         wrap_raw_ptr!($name => MlirOperation, Clone, Copy $(; doc=$doc)? );
 
-        impl NamedOp for $name {
+        impl crate::NamedOp for $name {
             const OP_NAME: Option<&'static str> = Some($operation_name);
         }
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                use crate::mlir::operation::Op;
                 self.print(f, false);
                 Ok(())
             }
@@ -292,14 +293,16 @@ macro_rules! def_operation {
 
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                use crate::mlir::operation::Op;
                 self.print(f, true);
                 Ok(())
             }
         }
 
-        impl From<$name> for Operation
+        impl From<$name> for crate::Operation
         {
             fn from(value: $name) -> Self {
+                use crate::wrap_raw::{HasRaw, WrapRawPtr};
                 crate::Operation::from_raw(value.raw())
             }
         }
@@ -318,6 +321,7 @@ macro_rules! impl_op_single_result {
     ($name:ident) => {
         impl $name {
             pub fn result(&self) -> crate::Value {
+                use crate::mlir::operation::Op;
                 self.result_at(0).unwrap()
             }
         }
@@ -360,10 +364,12 @@ macro_rules! def_operation_many_to_one {
 macro_rules! def_simple_unary_operation {
     ($name:ident, $operation_name:expr) => {
         def_operation!($name, $operation_name);
+        impl_op_single_result!($name);
 
-        impl $build {
-            pub fn new(builder: &mut crate::OpBuilder, arg: &crate::Value) -> Self {
+        impl $name {
+            pub fn build(builder: &mut crate::OpBuilder, arg: &crate::Value) -> Option<Self> {
                 builder.build_with(|_, result| {
+                    use crate::mlir::value::Val;
                     result.add_operand(arg);
                     result.add_result(&arg.ty());
                 })
@@ -377,6 +383,7 @@ macro_rules! def_simple_unary_operation {
 macro_rules! def_simple_binary_operation {
     ($name:ident, $operation_name:expr) => {
         def_operation!($name, $operation_name);
+        impl_op_single_result!($name);
 
         impl $name {
             pub fn build(builder: &mut OpBuilder, lhs: &Value, rhs: &Value) -> Option<Self> {

@@ -2,7 +2,6 @@
 // Copyright (c) 2022-2023 Kamyar Mohajerani
 
 use crate::crate_prelude::*;
-use circt_sys::cxx_bindings;
 use simple_error::SimpleError;
 use std::borrow::Borrow;
 
@@ -44,7 +43,7 @@ def_operation_single_result!(ConcatOp, "comb.concat");
 
 impl ICmpOp {
     /// Create a new comparison operation.
-    pub fn new(builder: &mut OpBuilder, pred: CmpPred, lhs: &Value, rhs: &Value) -> Option<Self> {
+    pub fn build(builder: &mut OpBuilder, pred: CmpPred, lhs: &Value, rhs: &Value) -> Option<Self> {
         builder.build_with(|builder, state| {
             let ctx = builder.context();
             state.add_operand(lhs);
@@ -189,7 +188,7 @@ pub(crate) fn trunc_or_zext(
             ExtractOp::with_sizes(builder, index, 0, target_width as _)?.result_at(0)
         }
         std::cmp::Ordering::Greater => {
-            let zero = hw::ConstantOp::build(builder, target_width - actual_width, 0)?.result();
+            let zero = hw::ConstantOp::build(builder, target_width - actual_width, 0).result();
             ConcatOp::build(builder, [zero, index.clone()].iter().cloned())?.result_at(0)
         }
         std::cmp::Ordering::Equal => Some(index.clone()),
