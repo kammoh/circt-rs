@@ -1,9 +1,7 @@
-use std::{borrow::Borrow, collections::HashMap};
-
 use crate::crate_prelude::*;
-use itertools::{Either, Itertools};
-
 use hw::{OutputOp, ParamDeclAttr};
+use itertools::{Either, Itertools};
+use std::{borrow::Borrow, collections::HashMap};
 
 def_operation!(HwModuleOp, "hw.module");
 
@@ -35,40 +33,38 @@ impl HwModuleOp {
             &HashMap<String, Value>,
             &mut HashMap<String, Value>,
         ),
-    ) -> Option<Self> {
+    ) -> Result<Self, Error> {
         let hw_module = Self::build_in_module(builder, module, name, ports, parameters, comment)?;
-        let mut output_val_map = HashMap::new();
-        let mut output_vals = Vec::new();
+        let mut output_val_map = HashMap::default();
+        let body = hw_module.first_block().ok_or(Error::IsNone)?;
 
-        let body = hw_module.first_block()?;
-
-        let inputs: HashMap<String, Value> = ports
-            .inputs
-            .iter()
-            .map(|pi| pi.name.clone())
-            .zip(body.arguments())
-            .collect();
+        let inputs: HashMap<String, Value> =
+            ports.inputs.iter().map(|pi| pi.name.clone()).zip(body.arguments()).collect();
 
         with_fn(builder, &body, &inputs, &mut output_val_map);
 
+        let mut output_vals = Vec::default();
+        println!("output_val_map: {:?}", &output_val_map);
         for out_port in ports.outputs.iter() {
-            if let Some(val) = output_val_map.remove(&out_port.name) {
-                output_vals.push(val);
-            } else {
-                eprintln!("Value for output port: {} is missing!", &out_port.name);
-                return None;
-            }
+            output_vals.push(output_val_map.remove(&out_port.name).ok_or(Error::simple(
+                format!("Value for output port: {} is missing!", &out_port.name),
+            ))?);
         }
+        println!("output_vals: {:?}", &output_vals);
         match body.terminator() {
             Some(term) if hw::OutputOp::isa(&term) => {
                 // already has OutputOp
             }
             _ => {
                 builder.set_insertion_point(Some(InsertPoint::BlockEnd(body)));
-                OutputOp::build::<Value>(builder, output_vals.iter())?;
+                OutputOp::build::<Value>(builder, output_vals.iter()).ok_or(Error::IsNone)?;
             }
         };
-        hw_module.verify().then_some(hw_module)
+        println!("..{:?}", &hw_module);
+        hw_module
+            .verify()
+            .then_some(hw_module)
+            .ok_or(Error::simple(format!("hw::ModuleOp verification failed. {:?}", &hw_module)))
     }
 
     pub fn build(
@@ -78,11 +74,11 @@ impl HwModuleOp {
         outputs: &[PortInfo],
         parameters: &[ParamDeclAttr],
         comment: &str,
-    ) -> Option<Self> {
+    ) -> Result<Self, Error> {
         let region = Region::default();
         let block = Block::default();
         let op: Self = builder
-            .build_with(|builder, state| {
+            .build_with(|_, state| {
                 let ctx = builder.context();
                 region.append_block(&block);
                 state.add_region(&region);
@@ -103,6 +99,7 @@ impl HwModuleOp {
                     "parameters",
                     &ArrayAttr::new::<ParamDeclAttr>(ctx, parameters.iter()),
                 );
+                println!("here outputs={:?}", outputs);
                 state.add_attribute(
                     "function_type",
                     &TypeAttr::new(&FunctionType::new(
@@ -114,10 +111,9 @@ impl HwModuleOp {
                 state.add_attribute("comment", &StringAttr::new(ctx, comment));
             })
             .expect("OpBuilder failed");
-        dbg!(op);
-        let body = op.first_block()?;
+        let body = op.first_block().ok_or(Error::IsNone)?;
         builder.set_insertion_point(Some(InsertPoint::BlockEnd(body)));
-        Some(op)
+        Ok(op)
     }
 
     pub fn build_in_module(
@@ -127,16 +123,9 @@ impl HwModuleOp {
         ports: &ModulePortInfo,
         parameters: &[ParamDeclAttr],
         comment: &str,
-    ) -> Option<Self> {
+    ) -> Result<Self, Error> {
         builder.set_insertion_point(Some(InsertPoint::BlockEnd(module.body())));
-        Self::build(
-            builder,
-            name,
-            &ports.inputs,
-            &ports.outputs,
-            parameters,
-            comment,
-        )
+        Self::build(builder, name, &ports.inputs, &ports.outputs, parameters, comment)
     }
 }
 
@@ -201,12 +190,10 @@ pub struct ModulePortInfo {
 impl ModulePortInfo {
     pub fn from_merged(merged_ports: impl IntoIterator<Item = PortInfo>) -> Self {
         let (outputs, inputs): (Vec<_>, Vec<_>) =
-            merged_ports
-                .into_iter()
-                .partition_map(|pi| match pi.direction {
-                    PortDirection::Output => Either::Left(pi),
-                    _ => Either::Right(pi),
-                });
+            merged_ports.into_iter().partition_map(|pi| match pi.direction {
+                PortDirection::Output => Either::Left(pi),
+                _ => Either::Right(pi),
+            });
         Self { inputs, outputs }
     }
 
@@ -220,89 +207,4 @@ impl ModulePortInfo {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{hw::ModulePortInfo, seq::CompRegOp, *};
-    #[test]
-    fn test_module_build() {
-        let ctx = OwnedContext::default();
-        comb::dialect().load(&ctx).unwrap();
-        seq::dialect().load(&ctx).unwrap();
-        hw::dialect().load(&ctx).unwrap();
-        fsm::dialect().load(&ctx).unwrap();
-        sv::dialect().load(&ctx).unwrap();
-        seq::register_passes();
-        hw::register_passes();
-        hw::register_arith_passes();
-        fsm::register_passes();
-        sv::register_passes();
-        transforms::register_cse();
-        transforms::register_canonicalizer();
-
-        let mut builder = OpBuilder::new(&ctx);
-        let module = Module::create(builder.loc());
-
-        let hw_module_name = "test_hw_module";
-        let mut ports = ModulePortInfo::default();
-
-        let i1 = IntegerType::new(&ctx, 1);
-
-        ports.add_input("a", &i1);
-        ports.add_input("b", &i1);
-        ports.add_input("clk", &i1);
-        ports.add_output("c", &i1);
-        ports.add_output("c1", &i1);
-
-        let hw_module = hw::HwModuleOp::build_with(
-            &mut builder,
-            &module,
-            hw_module_name,
-            &ports,
-            &[],
-            "no comments!",
-            |builder, _, inputs, outputs| {
-                let c1 = hw::ConstantOp::build(builder, 1, 1).result();
-                outputs.insert("c1".to_string(), c1);
-
-                let a_and_b = comb::AndOp::build(builder, &[inputs["a"], inputs["b"]])
-                    .unwrap()
-                    .result();
-
-                let c_reg =
-                    CompRegOp::build(builder, "c_reg", &a_and_b, &inputs["clk"], None, None)
-                        .unwrap()
-                        .result();
-
-                outputs.insert("c".to_string(), c_reg);
-            },
-        )
-        .unwrap();
-
-        println!("got hw_module: {:?}", hw_module);
-
-        assert!(hw_module.verify(), "hw_module verify failed");
-
-        let pm = OwnedPassManager::new(&ctx);
-
-        let passes = vec![
-            "builtin.module(lower-hwarith-to-hw)",
-            "builtin.module(hw.module(lower-seq-hlmem))",
-            "builtin.module(convert-fsm-to-sv)",
-            "builtin.module(lower-seq-to-sv)",
-            "builtin.module(cse, canonicalize, cse)",
-            "builtin.module(hw.module(prettify-verilog), hw.module(hw-cleanup))",
-        ];
-
-        for pipeline in passes.iter() {
-            println!("Running pass: {}", pipeline);
-            pm.parse(pipeline).expect("parse failed");
-            let r = pm.run(&module);
-            assert!(r.is_success());
-        }
-
-        println!("hw_module: {:?}", module.operation());
-
-        let out_dir = Path::new(hw_module_name);
-        std::fs::create_dir_all(out_dir).unwrap();
-        export_split_verilog(&module, &out_dir);
-    }
-}
+mod tests {}

@@ -1,6 +1,6 @@
 // Copyright (c) 2022-2023 Kamyar Mohajerani
-
 use crate::crate_prelude::*;
+use circt_sys::*;
 
 // Types and operations for seq dialect
 // The seq dialect is intended to model digital sequential logic.
@@ -9,6 +9,10 @@ define_dialect!(seq);
 
 pub fn register_passes() {
     unsafe { circt_sys::registerSeqPasses() }
+}
+
+pub fn create_seq_lower_to_sv_pass() -> Pass {
+    Pass::try_from_raw(unsafe { seqCreateSeqLowerToSVPass() }).unwrap()
 }
 
 def_operation_single_result!(CompRegClockEnabledOp, "seq.compreg.ce");
@@ -145,9 +149,6 @@ impl CompRegOp {
             } else {
                 assert!(reset_value.is_none());
             }
-            // if let Some(sym_name) = sym_name {
-            //     state.add_attribute("sym_name", &StringAttr::new(&ctx, sym_name));
-            // }
             state.add_result(&input.ty());
         })
     }

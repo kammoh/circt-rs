@@ -13,6 +13,13 @@ pub trait HwTy: HasRaw<RawType = MlirType> {
     fn bitwidth(&self) -> Option<usize> {
         unsafe { hwGetBitWidth(self.raw()) }.try_into().ok()
     }
+
+    /// Return true if the specified type can be used as an HW value type, that is the set of types
+    ///  that can be composed together to represent synthesized, hardware but not marker types like
+    ///  InOutType or unknown types from other dialects.
+    fn is_value_type(&self) -> bool {
+        unsafe { hwTypeIsAValueType(self.raw()) }
+    }
 }
 
 impl Type {
@@ -34,25 +41,23 @@ impl ArrayType {
 
     // returns the size of an array type
     pub fn size(&self) -> usize {
-        unsafe { hwArrayTypeGetSize(self.raw()) }
-            .try_into()
-            .unwrap()
+        unsafe { hwArrayTypeGetSize(self.raw()) }.try_into().unwrap()
     }
 
     /// returns the element type of an array type
     pub fn element_type(&self) -> Option<Type> {
-        Type::try_from_raw(
-            unsafe { hwArrayTypeGetElementType(self.raw()) }
-        )
+        Type::try_from_raw(unsafe { hwArrayTypeGetElementType(self.raw()) })
     }
 }
 
 impl TyIsa for ArrayType {
     /// If the type is an HW array
-    fn isa(ty: &Type) -> bool {
+    fn isa(ty: &impl HasRaw<RawType = MlirType>) -> bool {
         unsafe { hwTypeIsAArrayType(ty.raw()) }
     }
 }
+
+impl HwTy for ArrayType {}
 
 def_type!(InOutType);
 
@@ -72,10 +77,11 @@ impl InOutType {
 
 impl TyIsa for InOutType {
     /// If the type is an HW inout.
-    fn isa(ty: &Type) -> bool {
+    fn isa(ty: &impl HasRaw<RawType = MlirType>) -> bool {
         unsafe { hwTypeIsAInOut(ty.raw()) }
     }
 }
+impl HwTy for InOutType {}
 
 def_type!(StructType);
 
@@ -112,60 +118,109 @@ impl StructType {
     pub fn field_at(&self, pos: usize) -> Option<(String, Type)> {
         let HWStructFieldInfo { name, type_ } =
             unsafe { hwStructTypeGetFieldNum(self.raw(), pos as _) };
-        Some((
-            Identifier::try_from_raw(name)?.to_string(),
-            Type::try_from_raw(type_)?,
-        ))
+        Some((Identifier::try_from_raw(name)?.to_string(), Type::try_from_raw(type_)?))
     }
 
     pub fn num_fields(&self) -> usize {
-        unsafe { hwStructTypeGetNumFields(self.raw()) }
-            .try_into()
-            .unwrap()
+        unsafe { hwStructTypeGetNumFields(self.raw()) }.try_into().unwrap()
+    }
+
+    /// Get an iterator over the fields of a struct type.
+    pub fn fields(&self) -> Vec<(String, Type)> {
+        (0..self.num_fields()).map(|i| self.field_at(i).unwrap()).collect()
     }
 }
 
 impl TyIsa for StructType {
     /// If the type is an HW struct.
-    fn isa(ty: &Type) -> bool {
+    fn isa(ty: &impl HasRaw<RawType = MlirType>) -> bool {
         unsafe { hwTypeIsAStructType(ty.raw()) }
     }
 }
+impl HwTy for StructType {}
 
 def_type!(IntType; doc = "parameterized-width integer. Parameterized integer types are equivalent to the MLIR standard integer type: it is signless, and may be any width integer. This type represents the case when the width is a parameter in the HW dialect sense.");
 
 impl TyIsa for IntType {
     /// If the type is an HW int.
-    fn isa(ty: &Type) -> bool {
+    fn isa(ty: &impl HasRaw<RawType = MlirType>) -> bool {
         unsafe { hwTypeIsAIntType(ty.raw()) }
     }
 }
 
+impl HwTy for IntType {}
+
 def_type!(AliasType);
 
 impl AliasType {
-    pub fn canonical_type(&self) -> Option<Type> {
-        Type::try_from_raw(unsafe { hwTypeAliasTypeGetCanonicalType(self.raw()) })
+    /// Get HW type alias
+    pub fn new(scope: &str, name: &str, inner_type: Type) -> Option<Self> {
+        Self::try_from_raw(unsafe {
+            hwTypeAliasTypeGet(
+                StringRef::from_str(scope).raw(),
+                StringRef::from_str(name).raw(),
+                inner_type.raw(),
+            )
+        })
     }
 
-    pub fn inner_type(&self) -> Option<Type> {
-        Type::try_from_raw(unsafe { hwTypeAliasTypeGetInnerType(self.raw()) })
+    pub fn canonical_type(&self) -> Type {
+        Type::try_from_raw(unsafe { hwTypeAliasTypeGetCanonicalType(self.raw()) }).unwrap()
     }
 
-    pub fn name(&self) -> Option<String> {
+    pub fn inner_type(&self) -> Type {
+        Type::try_from_raw(unsafe { hwTypeAliasTypeGetInnerType(self.raw()) }).unwrap()
+    }
+
+    pub fn name(&self) -> String {
         StringRef::try_from_raw(unsafe { hwTypeAliasTypeGetName(self.raw()) })
             .map(|sr| sr.to_string())
+            .unwrap()
     }
 
-    pub fn scope(&self) -> Option<String> {
+    pub fn scope(&self) -> String {
         StringRef::try_from_raw(unsafe { hwTypeAliasTypeGetScope(self.raw()) })
             .map(|sr| sr.to_string())
+            .unwrap()
     }
 }
 
 impl TyIsa for AliasType {
     /// If the type is an HW type alias.
-    fn isa(ty: &Type) -> bool {
+    fn isa(ty: &impl HasRaw<RawType = MlirType>) -> bool {
         unsafe { hwTypeIsATypeAliasType(ty.raw()) }
+    }
+}
+impl HwTy for AliasType {}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn hw_types() {
+        let ctx = OwnedContext::default();
+        assert_eq!(ctx.num_loaded_dialects(), 1);
+
+        let hw_handle = hw::dialect();
+        let _ = hw_handle.load(&ctx).unwrap();
+
+        let i8_type = ctx.get_integer_type(8).unwrap();
+        let i8_io_type = hw::InOutType::new(&i8_type);
+
+        assert_eq!(i8_io_type.element_type(), i8_type);
+        assert!(!hw::InOutType::isa(&i8_type));
+        assert!(hw::InOutType::isa(&i8_io_type));
+
+        let scope = "myscope";
+        let name = "myname";
+
+        let type_alias = hw::AliasType::new(scope, name, i8_type).unwrap();
+        assert!(hw::AliasType::isa(&type_alias));
+        assert_eq!(type_alias.canonical_type(), i8_type);
+        assert_eq!(type_alias.inner_type(), i8_type);
+        assert_eq!(type_alias.scope(), scope);
+        assert_eq!(type_alias.name(), name);
     }
 }

@@ -1,12 +1,13 @@
 use cargo_emit::{rerun_if_changed, rustc_link_lib, rustc_link_search, warning};
 
-use miette::{Result, IntoDiagnostic};
+use miette::{IntoDiagnostic, Result};
 
 use std::{
     collections::HashMap,
     env,
+    io::Write,
     path::Path,
-    process::{Command, Stdio}, io::Write,
+    process::{Command, Stdio},
 };
 
 static CIRCT_DEP_SCRIPTS: [&str; 2] = [
@@ -123,18 +124,23 @@ fn main() -> Result<()> {
         "MLIRLLVMCommonConversion",
         "MLIRCAPIRegisterEverything",
         "MLIRIR",
+        "MLIRDialectUtils",
         "MLIRAnalysis",
         "MLIRCAPIIR",
         "MLIRCallInterfaces",
-        // "MLIRCAPIControlFlow",
-        // "MLIRCAPIFunc",
-        // "MLIRControlFlowDialect",
+        "MLIRCAPIControlFlow",
+        "MLIRCAPIFunc",
+        "MLIRControlFlowDialect",
         "MLIRControlFlowInterfaces",
-        // "MLIRFuncDialect",
-        // "MLIRFuncTransforms",
+        "MLIRLoopLikeInterface",
+        "MLIRFuncDialect",
+        "MLIRFuncTransforms",
         "MLIRIR",
         "MLIRInferTypeOpInterface",
         "MLIRInferIntRangeInterface",
+        "MLIRInferIntRangeCommon",
+        "MLIRViewLikeInterface",
+        "MLIRShapedOpInterfaces",
         // "MLIRTargetLLVMIRExport",
         "MLIRPDLToPDLInterp",
         "MLIRPDLDialect",
@@ -149,10 +155,14 @@ fn main() -> Result<()> {
         "MLIRTransformUtils",
         "MLIRTransforms",
         "MLIRAffineTransforms",
-        // "MLIRArithUtils",
+        "MLIRMemRefDialect",
+        "MLIRMemRefTransforms",
+        "MLIRMemRefTransformOps",
+        "MLIRMemRefUtils",
         // "MLIRArithToLLVM",
-        // "MLIRArithTransforms",
+        "MLIRArithTransforms",
         "MLIRArithDialect",
+        "MLIRArithUtils",
         // "MLIRArithAttrToLLVMConversion",
         "MLIRAffineUtils",
         "MLIRAffineTransformOps",
@@ -235,6 +245,7 @@ fn main() -> Result<()> {
     }
     rustc_link_lib!("ncurses" => "static");
 
+    rerun_if_changed!("wrapper.h");
     bindgen::Builder::default()
         .header("wrapper.h")
         .generate_block(true)
@@ -257,11 +268,11 @@ fn main() -> Result<()> {
         .extra_warnings(false)
         .compile("circt-sys-wrapper");
 
-    let mut b = autocxx_build::Builder::new(lib_src, &[include_dir, cargo_root])
-        .extra_clang_args(&[cpp_std])
-        .custom_gendir(bindings_dir)
-        .build()?;
-    b.flag(cpp_std).warnings(false).compile("autocxx");
+    // let mut b = autocxx_build::Builder::new(lib_src, &[include_dir, cargo_root])
+    //     .extra_clang_args(&[cpp_std])
+    //     .custom_gendir(bindings_dir)
+    //     .build()?;
+    // b.flag(cpp_std).warnings(false).compile("autocxx");
 
     Ok(())
 }

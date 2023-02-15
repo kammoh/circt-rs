@@ -1,0 +1,7 @@
+newline_style = "Unix"
+edition = "2021"
+fn_call_width = 80
+chain_width = 80
+overflow_delimited_expr = true
+reorder_impl_items = true
+required_version = "1.5.2"

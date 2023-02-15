@@ -4,8 +4,37 @@
 
 use crate::crate_prelude::*;
 use circt_sys::*;
+use num_derive::FromPrimitive;
 
 use super::string::StringRef;
+
+wrap_raw_ptr!(Diagnostic => MlirDiagnostic);
+
+#[derive(Debug, FromPrimitive)]
+pub enum DiagnosticSeverity {
+    Error = MlirDiagnosticSeverity_MlirDiagnosticError as _,
+    Warning = MlirDiagnosticSeverity_MlirDiagnosticWarning as _,
+    Note = MlirDiagnosticSeverity_MlirDiagnosticNote as _,
+    Remark = MlirDiagnosticSeverity_MlirDiagnosticRemark as _,
+}
+
+impl Diagnostic {
+    pub fn location(&self) -> Location {
+        Location::try_from_raw(unsafe { mlirDiagnosticGetLocation(self.0) }).unwrap()
+    }
+
+    pub fn severity(&self) -> DiagnosticSeverity {
+        num::FromPrimitive::from_u32(unsafe { mlirDiagnosticGetSeverity(self.0) }).unwrap()
+    }
+
+    pub fn num_notes(&self) -> usize {
+        unsafe { mlirDiagnosticGetNumNotes(self.0) as _ }
+    }
+
+    pub fn get_note(&self, pos: usize) -> Diagnostic {
+        Diagnostic::try_from_raw(unsafe { mlirDiagnosticGetNote(self.0, pos as _) as _ }).unwrap()
+    }
+}
 
 wrap_raw_ptr!(Context);
 
@@ -73,13 +102,67 @@ impl Context {
     pub fn num_loaded_dialects(&self) -> usize {
         unsafe { mlirContextGetNumLoadedDialects(self.raw()) as _ }
     }
+
+    /// Attaches the diagnostic handler to the context.
+    /// Handlers are invoked in the reverse order of attachment until one of them processes the diagnostic completely.
+    /// When a handler is invoked it is passed the userData that was provided when it was attached.
+    /// If non-NULL, `drop_user_data` is called once the system no longer needs to call the handler
+    ///  (for instance after the handler is detached or the context is destroyed).
+    /// Returns an identifier that can be used to detach the handler.
+    pub fn attach_diagnostic_handler<T: HandlerObject>(&self, handler_obj: Box<T>) -> u64 {
+        let handler_obj = Box::leak(handler_obj);
+        unsafe {
+            mlirContextAttachDiagnosticHandler(
+                self.raw(),
+                Some(diagnostic_handler::<T>),
+                handler_obj as *const _ as *mut _,
+                Some(drop_handler::<T>),
+            )
+        }
+    }
+
+    /// Detaches an attached diagnostic handler from the context given its identifier.
+    pub fn detach_diagnostic_handler(&self, id: u64) {
+        unsafe { mlirContextDetachDiagnosticHandler(self.raw(), id) }
+    }
 }
 
 impl_create!(Context);
 impl_into_owned!(Context);
 
+pub trait HandlerObject {
+    fn handle(&mut self, diag: Diagnostic) -> LogicalResult;
+}
+
+#[derive(Default, Debug)]
+pub struct PrintHandler(bool);
+
+impl HandlerObject for PrintHandler {
+    fn handle(&mut self, diag: Diagnostic) -> LogicalResult {
+        println!("Severity: {:?}", diag.severity());
+        self.0.into()
+    }
+}
+
+unsafe extern "C" fn diagnostic_handler<T: HandlerObject>(
+    diag: MlirDiagnostic,
+    use_data: *mut std::ffi::c_void,
+) -> MlirLogicalResult {
+    let mut user_data = unsafe { Box::from_raw(use_data as *mut T) };
+    let res = user_data.handle(Diagnostic::from_raw(diag)).raw();
+    Box::leak(user_data);
+    res
+}
+unsafe extern "C" fn drop_handler<T: HandlerObject>(use_data: *mut std::ffi::c_void) {
+    if !use_data.is_null() {
+        let user_data = unsafe { Box::from_raw(use_data as *mut T) };
+        drop(user_data)
+    }
+}
+
 impl Default for Owned<Context> {
     fn default() -> Self {
-        Self(Context::create().unwrap())
+        let ctx = Context::create().unwrap();
+        Self(ctx)
     }
 }

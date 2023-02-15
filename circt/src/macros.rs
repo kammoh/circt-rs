@@ -3,7 +3,7 @@
 macro_rules! define_dialect {
     ($name:ident) => {
         paste::paste!{
-            pub fn dialect() -> crate::mlir::DialectHandle {
+            pub fn dialect() -> crate::DialectHandle {
                 use crate::WrapRawPtr;
                 super::mlir::DialectHandle::try_from_raw(unsafe { circt_sys::[< mlirGetDialectHandle__ $name __>]() }).unwrap()
             }
@@ -279,7 +279,7 @@ macro_rules! def_operation {
     ($name:ident, $operation_name:expr $(; doc=$doc:tt)?) => {
         wrap_raw_ptr!($name => MlirOperation, Clone, Copy $(; doc=$doc)? );
 
-        impl crate::NamedOp for $name {
+        impl mlir::NamedOp for $name {
             const OP_NAME: Option<&'static str> = Some($operation_name);
         }
 
@@ -299,11 +299,11 @@ macro_rules! def_operation {
             }
         }
 
-        impl From<$name> for crate::Operation
+        impl From<$name> for mlir::Operation
         {
             fn from(value: $name) -> Self {
                 use crate::wrap_raw::{HasRaw, WrapRawPtr};
-                crate::Operation::from_raw(value.raw())
+                mlir::Operation::from_raw(value.raw())
             }
         }
     };
@@ -320,7 +320,7 @@ macro_rules! def_operation_single_result {
 macro_rules! impl_op_single_result {
     ($name:ident) => {
         impl $name {
-            pub fn result(&self) -> crate::Value {
+            pub fn result(&self) -> mlir::Value {
                 use crate::mlir::operation::Op;
                 self.result_at(0).unwrap()
             }
@@ -332,7 +332,7 @@ macro_rules! impl_op_build_many_to_one {
     ($name:ident) => {
         impl $name {
             pub fn build(
-                builder: &mut crate::OpBuilder,
+                builder: &mut mlir::OpBuilder,
                 args: impl IntoIterator<Item = impl std::borrow::Borrow<Value>>,
             ) -> Option<Self> {
                 builder.build_with(|_, result| {

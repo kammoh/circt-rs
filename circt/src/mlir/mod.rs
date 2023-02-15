@@ -16,6 +16,8 @@ pub mod transforms;
 pub mod ty;
 pub mod value;
 
+use std::error::Error;
+
 pub use attr::*;
 pub use block::*;
 pub use builder::*;
@@ -31,19 +33,8 @@ pub use symbol::*;
 pub use ty::*;
 pub use value::*;
 
+use crate::crate_prelude::*;
 use circt_sys::*;
-
-use crate::crate_prelude::WrapRawPtr;
-
-// Some MLIR objects are created using `_Create`, the ownership is given to the caller,
-//  and the caller is responsible to free them using their `_Destroy` function.
-// Mlir_ C-binding functions need a copy of the Mlir_ object, which contains a pointer to actual C++ object.
-// Is there a way to keep reference count and destroy on drop?!
-//
-// Types with Create & Destroy (11)
-// MlirBlock, MlirContext, MlirDialectRegistry, MlirExecutionEngine, MlirModule, MlirOperation,
-//  MlirOpPrintingFlags, MlirPassManager, MlirRegion, MlirSymbolTable, MlirTypeIDAllocator
-//
 
 pub struct Owned<T: IntoOwned>(T);
 
@@ -61,6 +52,53 @@ impl<T: IntoOwned> std::ops::Deref for Owned<T> {
     type Target = T;
     fn deref(&self) -> &T {
         &self.0
+    }
+}
+
+wrap_raw!(LogicalResult);
+
+impl LogicalResult {
+    pub fn success() -> Self {
+        Self(MlirLogicalResult { value: 1 })
+    }
+    pub fn failure() -> Self {
+        Self(MlirLogicalResult { value: 0 })
+    }
+
+    pub fn to_option<T>(&self, ok: T) -> Option<T> {
+        self.is_success().then_some(ok)
+    }
+
+    pub fn to_result<T, E: Error>(&self, ok: T, err: E) -> Result<T, E> {
+        self.to_option(ok).ok_or(err)
+    }
+
+    pub fn is_success(&self) -> bool {
+        self.raw().value != 0
+    }
+}
+
+impl From<bool> for LogicalResult {
+    fn from(value: bool) -> Self {
+        Self(MlirLogicalResult { value: value as _ })
+    }
+}
+
+impl From<LogicalResult> for bool {
+    fn from(value: LogicalResult) -> Self {
+        value.is_success()
+    }
+}
+
+impl From<LogicalResult> for Option<()> {
+    fn from(value: LogicalResult) -> Self {
+        value.to_option(())
+    }
+}
+
+impl<T: Default> From<LogicalResult> for Result<(), T> {
+    fn from(value: LogicalResult) -> Self {
+        value.to_option(()).ok_or(Default::default())
     }
 }
 

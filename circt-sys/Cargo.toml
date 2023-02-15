@@ -8,13 +8,9 @@ build = "build.rs"
 doctest = true
 
 [dependencies]
-autocxx = "0.24.0"
-cxx = { version = "1.0.90", features = ["c++17"] }
 libc = "0.2"
-miette = { version = "5.5.0", features = ["fancy"] }
 
 [build-dependencies]
-autocxx-build = "0.24.0"
 bindgen = "0.63"
 cargo-emit = "0.2"
 cc = "1.0"

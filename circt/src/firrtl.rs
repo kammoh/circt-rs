@@ -1,129 +1,69 @@
 // Copyright (c) 2022-2023 Kamyar Mohajerani
 
-use circt_sys::registerFirrtlPasses;
+use crate::crate_prelude::*;
+use circt_sys::*;
+
 define_dialect!(firrtl);
 
-pub fn register_firrtl_passes() {
-    unsafe { registerFirrtlPasses() }
+pub fn register_passes() {
+    unsafe { registerFIRRTLPasses() }
+}
+
+pub fn register_lower_chirrtl_pass() {
+    unsafe { firrtlRegisterLowerCHIRRTLPass() }
+}
+
+pub fn create_lower_chirrtl_pass() -> Pass {
+    Pass::try_from_raw(unsafe { firrtlCreateLowerCHIRRTLPass() }).unwrap()
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use super::*;
+    use mlir::cse;
     use miette::IntoDiagnostic;
 
     #[test]
     fn test_firrtl() -> miette::Result<()> {
         let ctx = OwnedContext::default();
         let firrtl_handle = firrtl::dialect();
-        firrtl_handle
-            .load(&ctx)
-            .expect("failed to load FIRRTL dialect");
+        firrtl_handle.load(&ctx).expect("failed to load FIRRTL dialect");
         assert!(ctx.num_loaded_dialects() >= 2);
         Ok(())
     }
     #[test]
-    fn test_firtool() {
+    fn test_firtool() -> miette::Result<()> {
         let ctx = OwnedContext::default();
+        hw::register_passes();
+        hw::register_arith_passes();
+        seq::register_passes();
+        sv::register_passes();
+        firrtl::dialect().load(&ctx).unwrap();
+        firrtl::register_passes();
+        firrtl::register_lower_chirrtl_pass();
 
-        // let pm = mlirPassManagerCreate(ctx);
+        let builder = OpBuilder::new(&ctx);
+        let module = Module::create(builder.loc());
 
-        // let tm = mlirCreateDefaultTimingManager();
-        // let ts = mlirTimingManagerGetRootScope(mlirDefaultTimingManagerGetAsTimingManager(tm));
-        // mlirPassManagerEnableTiming(pm, ts);
+        let pm = OwnedPassManager::new(&ctx);
+        pm.enable_verifier(true);
 
-        // let verify_passes = true;
-        // mlirPassManagerEnableVerifier(pm, verify_passes);
+        pm.nest("firrtl.circuit").nest("firrtl.module").add_pass(&cse());
 
-        // let module = firrtlParseFile(ctx, "test.fir".into());
-        // assert!(!module.ptr.is_null());
+        pm.nest("firrtl.circuit")
+            .nest("firrtl.module")
+            .add_pass(&create_lower_chirrtl_pass());
+        pm.nest("firrtl.circuit") //
+            .parse_pass("firrtl-infer-widths")
+            .into_diagnostic()?;
+        pm.nest("firrtl.circuit") //
+            .parse_pass("firrtl-infer-resets")
+            .into_diagnostic()?
+            .parse_pass("firrtl-prefix-modules")
+            .into_diagnostic()?;
 
-        // pm.nest("firrtl.circuit")
-        //     .nest("firrtl.module")
-        //     .add_pass(mlirCreateTransformsCSE());
+        pm.run(&module).unwrap();
 
-        // pm.nest("firrtl.circuit")
-        //     .nest("firrtl.module")
-        //     .add_pass(mlirCreateFIRRTLLowerCHIRRTL());
-        // pm.nest("firrtl.circuit")
-        //     .add_pass(mlirCreateFIRRTLInferWidths());
-        // pm.nest("firrtl.circuit")
-        //     .add_pass(mlirCreateFIRRTLInferResets());
-        // mlirOpPassManagerAddOwnedPass(
-        //     pm.nest("firrtl.circuit"),
-        //     mlirCreateFIRRTLPrefixModules(),
-        // );
-        // mlirOpPassManagerAddOwnedPass(
-        //     pm.nest("firrtl.circuit"),
-        //     mlirCreateFIRRTLBlackBoxMemory(),
-        // );
-        // mlirOpPassManagerAddOwnedPass(
-        //     pm.nest("firrtl.circuit"),
-        //     mlirCreateFIRRTLLowerFIRRTLTypes(),
-        // );
-        // pm.nest("firrtl.circuit")
-        //     .nest("firrtl.module")
-        //     .add_pass(mlirCreateFIRRTLExpandWhens());
-
-        // mlirOpPassManagerAddOwnedPass(
-        //     pm.nest("firrtl.circuit"),
-        //     mlirCreateFIRRTLCheckCombCycles(),
-        // );
-
-        // pm.nest("firrtl.circuit")
-        //     .nest("firrtl.module")
-        //     .add_pass(mlirCreateFIRRTLSimpleCanonicalizer());
-
-        // pm.nest("firrtl.circuit")
-        //     .add_pass(mlirCreateFIRRTLInliner());
-
-        // pm.nest("firrtl.circuit")
-        //     .add_pass(mlirCreateFIRRTLIMConstProp());
-
-        // // createBlackBoxReaderPass
-
-        // // grandCentral
-
-        // pm.nest("firrtl.circuit")
-        //     .nest("firrtl.module")
-        //     .add_pass(mlirCreateFIRRTLSimpleCanonicalizer());
-
-        // // createCreateSiFiveMetadataPass
-
-        // let omir_pass = mlirCreateFIRRTLEmitOMIR();
-        // // (*(omir_pass.ptr)).outputFilename = "out.mir".into();
-
-        // pm.nest("firrtl.circuit").add_pass(omir_pass);
-
-        // pm.add_pass(mlirCreateLowerFIRRTLToHW());
-        // pm.add_pass(mlirCreateSVHWMemSimImpl());
-
-        // //createSVExtractTestCodePass
-
-        // let hw_module_pm = pm.nest("hw.module");
-
-        // hw_module_pm.add_pass(mlirCreateSVHWCleanup());
-        // hw_module_pm.add_pass(mlirCreateTransformsCSE());
-        // hw_module_pm.add_pass(mlirCreateFIRRTLSimpleCanonicalizer());
-
-        // hw_module_pm.add_pass(mlirCreateSVHWLegalizeModules());
-        // hw_module_pm.add_pass(mlirCreateSVPrettifyVerilog());
-
-        // // pm.add_pass( circtCreateExportVerilogToFilePass("out.v".into()));
-        // pm.add_pass(mlirCreateTransformsViewOpGraphPass());
-
-        // let mut buffer = File::create("pipeline.txt").expect("unable to create file");
-        // let mut _d = [0u8];
-
-        // let (user_data, cb) = buffer.into_callback();
-        // mlirPrintPassPipeline(pm.into(), Some(cb), user_data);
-
-        // // first run the PassManager
-        // assert!(pm.run(module).is_ok());
-
-        // // then export verilog
-        // assert!(module
-        //     .export_verilog(File::create("out.v").expect("unable to create file"))
-        //     .is_ok());
+        Ok(())
     }
 }

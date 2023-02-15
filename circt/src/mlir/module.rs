@@ -1,5 +1,22 @@
-use crate::{crate_prelude::*, ModuleOp};
+use crate::crate_prelude::*;
 use circt_sys::*;
+
+def_operation!(ModuleOp, "builtin.module");
+
+impl SingleRegionOp for ModuleOp {}
+
+impl SingleBlockOp for ModuleOp {}
+
+impl ModuleOp {
+    pub fn build(builder: &mut OpBuilder) -> Option<Self> {
+        let region = Region::default();
+        let block = Block::default();
+        builder.build_with(|_, state| {
+            region.append_block(&block);
+            state.add_region(&region)
+        })
+    }
+}
 
 wrap_raw_ptr!(Module);
 
@@ -32,9 +49,8 @@ impl Module {
         Block::try_from_raw(unsafe { mlirModuleGetBody(self.raw()) }).unwrap()
     }
 
-
     /// Views the module as a ModuleOp operation.
-    pub fn operation(&self) -> ModuleOp {
-        ModuleOp::try_from_raw(unsafe { mlirModuleGetOperation(self.raw()) }).unwrap()
+    pub fn op(&self) -> mlir::ModuleOp {
+        mlir::ModuleOp::try_from_raw(unsafe { mlirModuleGetOperation(self.raw()) }).unwrap()
     }
 }

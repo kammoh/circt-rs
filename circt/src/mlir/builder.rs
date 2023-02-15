@@ -65,8 +65,8 @@ impl<'a> OpBuilder<'a> {
     /// Build an operation through a callback that populates an
     /// `OperationState`.
     pub fn build_with<Op: NamedOp>(
-        &mut self,
-        with_fn: impl FnOnce(&mut Self, &mut OperationState),
+        &self,
+        with_fn: impl FnOnce(&Self, &mut OperationState),
     ) -> Option<Op> {
         let mut state = OperationState::new(Op::operation_name(), &self.loc);
         with_fn(self, &mut state);

@@ -8,11 +8,9 @@
 
 pub use libc::size_t;
 
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/bindings/bindings.rs"
-));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/bindings/bindings.rs"));
 
+/*
 use autocxx::prelude::*;
 
 include_cpp! {
@@ -131,6 +129,7 @@ include_cpp! {
 pub mod cxx_bindings {
     pub use super::ffi::*;
 }
+*/
 
 #[cfg(test)]
 mod tests {}

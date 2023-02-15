@@ -37,7 +37,7 @@ impl PartialEq for Type {
 }
 
 impl TyIsa for Type {
-    fn isa(_: &Type) -> bool {
+    fn isa(_: &impl HasRaw<RawType = MlirType>) -> bool {
         true
     }
 }
@@ -67,30 +67,28 @@ pub trait Ty: WrapRawPtr<RawType = MlirType> {
 /// including for Type (unspecified type)
 impl<T> Ty for T where T: WrapRawPtr<RawType = MlirType> {}
 
-
 // impl<T> From<T> for Type where T: Ty {
 //     fn from(value: T) -> Self {
 //         Self::from_raw(value.raw())
 //     }
 // }
 
-impl<T> From<&T> for Type where T: Ty {
+impl<T> From<&T> for Type
+where
+    T: Ty,
+{
     fn from(value: &T) -> Self {
         Self::from_raw(value.raw())
     }
 }
 
-
-
 pub trait TyIsa: Ty {
-    fn isa(_: &Type) -> bool {
+    fn isa(_: &impl HasRaw<RawType = MlirType>) -> bool {
         panic!("not implemented")
     }
 }
 
-pub trait TyHasWidth: Ty {
-
-}
+pub trait TyHasWidth: Ty {}
 
 def_type!(IndexType);
 
@@ -103,7 +101,7 @@ impl IndexType {
 
 impl TyIsa for IndexType {
     /// Checks whether the given type is an index type.
-    fn isa(ty: &Type) -> bool {
+    fn isa(ty: &impl HasRaw<RawType = MlirType>) -> bool {
         unsafe { mlirTypeIsAIndex(ty.raw()) }
     }
 }
@@ -123,7 +121,7 @@ impl IntegerType {
 
 impl TyIsa for IntegerType {
     /// Checks whether the given type is an integer type.
-    fn isa(ty: &Type) -> bool {
+    fn isa(ty: &impl HasRaw<RawType = MlirType>) -> bool {
         unsafe { mlirTypeIsAInteger(ty.raw()) }
     }
 }
@@ -182,7 +180,7 @@ impl FunctionType {
 
 impl TyIsa for FunctionType {
     /// Checks whether the given type is a function type.
-    fn isa(ty: &Type) -> bool {
+    fn isa(ty: &impl HasRaw<RawType = MlirType>) -> bool {
         unsafe { mlirTypeIsAFunction(ty.raw()) }
     }
 }
