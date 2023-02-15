@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 cached = "0.42.0"
-circt-sys = {path = "../circt-sys"}
+circt-sys = { path = "../circt-sys" }
 itertools = "0.10.5"
 lazy_static = "1.4.0"
 miette = { version = "5.5.0", features = ["fancy"] }
@@ -19,3 +19,7 @@ quote = "1.0.23"
 readonly = "0.2.3"
 simple-error = "0.2.3"
 thiserror = "1.0.38"
+
+
+[features]
+torture = []

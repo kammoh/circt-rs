@@ -30,9 +30,9 @@ impl OpPrintingFlags {
     }
 }
 
-impl OwnedOpPrintingFlags {
-    pub fn new() -> Self {
-        Self(OpPrintingFlags::create())
+impl Default for Owned<OpPrintingFlags> {
+    fn default() -> Self {
+        Self(OpPrintingFlags::default())
     }
 }
 
@@ -192,7 +192,7 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
         // Prints an operation by sending chunks of the string representation and forwarding userData to callback`.
         // Note that the callback may be called several times with consecutive chunks of the string.
         if with_debug_info {
-            let flags = OwnedOpPrintingFlags::new();
+            let flags = OwnedOpPrintingFlags::default();
             unsafe {
                 mlirOperationPrintWithFlags(
                     self.raw(),
@@ -412,5 +412,6 @@ mod tests {
         let op: hw::ConstantOp = state.build().unwrap();
         println!("{:?}", op);
         assert_eq!(op.to_string(), "\"hw.constant\"() : () -> ()\n");
+        println!("{:?}", op);
     }
 }

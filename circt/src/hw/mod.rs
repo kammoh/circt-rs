@@ -45,3 +45,29 @@ pub mod passes {
 pub fn is_value_type(ty: Type) -> bool {
     unsafe { hwTypeIsAValueType(ty.raw()) }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn register_hw() {
+        let ctx = OwnedContext::default();
+        assert_eq!(ctx.num_loaded_dialects(), 1);
+
+        let hw_handle = hw::dialect();
+        let hw = hw_handle.load(&ctx).unwrap();
+        let hw2 = hw_handle.load(&ctx).unwrap();
+        assert_eq!(ctx.num_loaded_dialects(), 2);
+        assert_eq!(hw, hw2);
+
+        let seq_handle = seq::dialect();
+        let seq = seq_handle.load(&ctx).unwrap();
+        let seq2 = seq_handle.load(&ctx).unwrap();
+        assert_eq!(ctx.num_loaded_dialects(), 3);
+        assert_eq!(seq, seq2);
+
+        hw::register_passes();
+        seq::register_passes();
+    }
+}

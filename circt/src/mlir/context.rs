@@ -38,9 +38,6 @@ impl Diagnostic {
 
 wrap_raw_ptr!(Context);
 
-/// An owned MLIR context.
-// pub type OwnedContext = Owned<Context>;
-
 impl Context {
     /// Get an interned identifier.
     pub fn get_identifier(&self, ident: &str) -> MlirIdentifier {
@@ -153,6 +150,7 @@ unsafe extern "C" fn diagnostic_handler<T: HandlerObject>(
     Box::leak(user_data);
     res
 }
+
 unsafe extern "C" fn drop_handler<T: HandlerObject>(use_data: *mut std::ffi::c_void) {
     if !use_data.is_null() {
         let user_data = unsafe { Box::from_raw(use_data as *mut T) };
@@ -162,6 +160,6 @@ unsafe extern "C" fn drop_handler<T: HandlerObject>(use_data: *mut std::ffi::c_v
 
 impl Default for Owned<Context> {
     fn default() -> Self {
-        Self(Context::create())
+        Self(Context::default())
     }
 }

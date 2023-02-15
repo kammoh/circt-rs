@@ -5,14 +5,6 @@ wrap_raw_ptr!(Pass);
 
 impl Pass {}
 
-pub fn register_all_passes() {
-    unsafe { mlirRegisterAllPasses() }
-}
-
-pub fn register_conversion_passes() {
-    unsafe { mlirRegisterConversionPasses() }
-}
-
 pub fn register_passes() {
     unsafe { mlirRegisterTransformsPasses() }
 }
@@ -33,7 +25,7 @@ pub fn register_view_op_graph() {
     unsafe { mlirRegisterTransformsViewOpGraph() }
 }
 
-pub fn register_canonicalizer() {
+pub fn register_canonicalize() {
     unsafe { mlirRegisterTransformsCanonicalizer() }
 }
 

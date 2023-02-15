@@ -39,26 +39,6 @@ pub fn register_circt_passes() {
 mod tests {
     use crate::prelude::*;
     use std::path::Path;
-    #[test]
-    fn register_hw() {
-        let ctx = OwnedContext::default();
-        assert_eq!(ctx.num_loaded_dialects(), 1);
-
-        let hw_handle = hw::dialect();
-        let hw = hw_handle.load(&ctx).unwrap();
-        let hw2 = hw_handle.load(&ctx).unwrap();
-        assert_eq!(ctx.num_loaded_dialects(), 2);
-        assert_eq!(hw, hw2);
-
-        let seq_handle = seq::dialect();
-        let seq = seq_handle.load(&ctx).unwrap();
-        let seq2 = seq_handle.load(&ctx).unwrap();
-        assert_eq!(ctx.num_loaded_dialects(), 3);
-        assert_eq!(seq, seq2);
-
-        hw::register_passes();
-        seq::register_passes();
-    }
 
     #[test]
     fn test_module_build() -> miette::Result<()> {
@@ -68,7 +48,8 @@ mod tests {
         comb::dialect().load(&ctx).unwrap();
         seq::dialect().load(&ctx).unwrap();
         hw::dialect().load(&ctx).unwrap();
-        mlir::register_passes();
+        mlir::register_cse();
+        mlir::register_canonicalize();
         hw::register_passes();
         hw::register_arith_passes();
         seq::register_passes();
@@ -111,7 +92,8 @@ mod tests {
             },
         )?;
 
-        let pm = OwnedPassManager::new(&ctx);
+        // let pm = OwnedPassManager::new(&ctx);
+        let pm = PassManager::new(&ctx);
         pm.enable_verifier(true);
 
         #[rustfmt::skip]

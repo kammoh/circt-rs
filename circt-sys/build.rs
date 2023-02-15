@@ -17,10 +17,8 @@ static CIRCT_DEP_SCRIPTS: [&str; 2] = [
 ];
 
 fn main() -> Result<()> {
-    rerun_if_changed!("build.rs");
-    // rerun_if_changed!("Cargo.lock"); // for some reason reruns build every time!
-
     let cargo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    rerun_if_changed!(cargo_root.join("build.rs").to_str().unwrap());
 
     let lib_src = cargo_root.join("src/lib.rs");
     rerun_if_changed!(lib_src.to_str().unwrap());
@@ -107,22 +105,11 @@ fn main() -> Result<()> {
     rustc_link_search!(lib_dir.to_str().unwrap() => "native");
 
     let lib_names = [
-        // "LLVMBinaryFormat",
-        // "LLVMBitstreamReader",
         "LLVMCore",
         "LLVMDemangle",
-        // "LLVMRemarks",
         "LLVMSupport",
-        // "LLVMIRPrinter",
-        // "LLVMCFIVerify",
-        // "LLVMTarget",
-        // "LLVMTargetParser",
-        // "LLVMPasses",
-        // "LLVMMCDisassembler",
         "MLIRSupport",
-        // "MLIRToLLVMIRTranslationRegistration",
         "MLIRLLVMCommonConversion",
-        "MLIRCAPIRegisterEverything",
         "MLIRIR",
         "MLIRDialectUtils",
         "MLIRAnalysis",
@@ -141,7 +128,6 @@ fn main() -> Result<()> {
         "MLIRInferIntRangeCommon",
         "MLIRViewLikeInterface",
         "MLIRShapedOpInterfaces",
-        // "MLIRTargetLLVMIRExport",
         "MLIRPDLToPDLInterp",
         "MLIRPDLDialect",
         "MLIRPDLInterpDialect",
@@ -154,19 +140,16 @@ fn main() -> Result<()> {
         "MLIRSideEffectInterfaces",
         "MLIRTransformUtils",
         "MLIRTransforms",
-        "MLIRAffineTransforms",
         "MLIRMemRefDialect",
         "MLIRMemRefTransforms",
         "MLIRMemRefTransformOps",
         "MLIRMemRefUtils",
-        // "MLIRArithToLLVM",
         "MLIRArithTransforms",
         "MLIRArithDialect",
         "MLIRArithUtils",
-        // "MLIRArithAttrToLLVMConversion",
+        "MLIRAffineDialect",
         "MLIRAffineUtils",
         "MLIRAffineTransformOps",
-        "MLIRAffineDialect",
         "MLIRRuntimeVerifiableOpInterface",
         "CIRCTSupport",
         "CIRCTTransforms",
@@ -200,7 +183,6 @@ fn main() -> Result<()> {
         "CIRCTExportChiselInterface",
         "CIRCTFIRRTLToHW",
         "CIRCTFIRRTLTransforms",
-        "MLIRTransforms",
     ];
     for lib in lib_names {
         rustc_link_lib!(lib => "static");
@@ -267,12 +249,6 @@ fn main() -> Result<()> {
         .warnings(false)
         .extra_warnings(false)
         .compile("circt-sys-wrapper");
-
-    // let mut b = autocxx_build::Builder::new(lib_src, &[include_dir, cargo_root])
-    //     .extra_clang_args(&[cpp_std])
-    //     .custom_gendir(bindings_dir)
-    //     .build()?;
-    // b.flag(cpp_std).warnings(false).compile("autocxx");
 
     Ok(())
 }

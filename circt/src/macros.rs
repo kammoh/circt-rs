@@ -138,11 +138,11 @@ macro_rules! impl_into_owned {
 }
 
 macro_rules! impl_create {
-    ($name:ident $(, $arg:ident:$arg_ty:ty)* ) => {
+    ($name:ident) => {
         paste::paste! {
-            impl $name {
-                pub fn create($($arg : $arg_ty, )*) -> Self {
-                    Self::try_from_raw(unsafe { [<mlir $name Create>]($($arg)*) }).unwrap()
+            impl Default for $name {
+                fn default() -> Self {
+                    Self::try_from_raw(unsafe { [<mlir $name Create>]() }).unwrap()
                 }
             }
         }

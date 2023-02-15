@@ -44,13 +44,11 @@ impl HwModuleOp {
         with_fn(builder, &body, &inputs, &mut output_val_map);
 
         let mut output_vals = Vec::default();
-        println!("output_val_map: {:?}", &output_val_map);
         for out_port in ports.outputs.iter() {
             output_vals.push(output_val_map.remove(&out_port.name).ok_or(Error::simple(
                 format!("Value for output port: {} is missing!", &out_port.name),
             ))?);
         }
-        println!("output_vals: {:?}", &output_vals);
         match body.terminator() {
             Some(term) if hw::OutputOp::isa(&term) => {
                 // already has OutputOp
@@ -60,7 +58,6 @@ impl HwModuleOp {
                 OutputOp::build::<Value>(builder, output_vals.iter()).ok_or(Error::IsNone)?;
             }
         };
-        println!("..{:?}", &hw_module);
         hw_module
             .verify()
             .then_some(hw_module)
@@ -99,7 +96,6 @@ impl HwModuleOp {
                     "parameters",
                     &ArrayAttr::new::<ParamDeclAttr>(ctx, parameters.iter()),
                 );
-                println!("here outputs={:?}", outputs);
                 state.add_attribute(
                     "function_type",
                     &TypeAttr::new(&FunctionType::new(

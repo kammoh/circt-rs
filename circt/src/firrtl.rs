@@ -66,4 +66,11 @@ mod tests {
 
         Ok(())
     }
+
+    // #[test]
+    // fn torture_test_firrtl() {
+    //     for _ in 0..1000 {
+    //         test_firtool().unwrap();
+    //     }
+    // }
 }
