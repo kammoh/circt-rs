@@ -9,6 +9,33 @@ wrap_raw_ptr!(OpPrintingFlags);
 impl_create!(OpPrintingFlags);
 impl_into_owned!(OpPrintingFlags);
 
+impl OpPrintingFlags {
+    /// Enable or disable printing of debug information (based on enable).
+    /// If 'pretty_form' is set to true, debug information is printed in a more readable 'pretty' form.
+    /// Note: The IR generated with 'pretty_form' is not parsable.
+    pub fn enable_debug_info(&self, enable: bool, pretty_form: bool) {
+        unsafe { mlirOpPrintingFlagsEnableDebugInfo(self.raw(), enable, pretty_form) }
+    }
+
+    /// Always print operations in the generic form.
+    pub fn print_generic_opform(&self) {
+        unsafe { mlirOpPrintingFlagsPrintGenericOpForm(self.0) }
+    }
+
+    /// Use local scope when printing the operation.
+    /// This allows for using the printer in a more localized and thread-safe setting,
+    ///  but may not necessarily be identical to what the IR will look like when dumping the full module.
+    pub fn use_local_scope(&self) {
+        unsafe { mlirOpPrintingFlagsUseLocalScope(self.0) }
+    }
+}
+
+impl OwnedOpPrintingFlags {
+    pub fn new() -> Self {
+        Self(OpPrintingFlags::create())
+    }
+}
+
 wrap_raw_ptr!(Operation, Clone, Copy);
 impl_into_owned!(Operation);
 
@@ -31,6 +58,21 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
         Identifier::try_from_raw(unsafe { mlirOperationGetName(self.raw()) }).unwrap()
     }
 
+    /// Gets the context this operation is associated with
+    fn context(&self) -> Context {
+        Context::try_from_raw(unsafe { mlirOperationGetContext(self.raw()) }).unwrap()
+    }
+
+    /// Gets the block that owns this operation, returning `None` if the operation is not owned.
+    fn parent_block(&self) -> Option<Block> {
+        Block::try_from_raw(unsafe { mlirOperationGetBlock(self.raw()) })
+    }
+
+    /// Gets the location of the operation.
+    fn loc(&self) -> Location {
+        Location::try_from_raw(unsafe { mlirOperationGetLocation(self.raw()) }).unwrap()
+    }
+
     /// Creates an operation and transfers ownership to the caller.
     ///
     /// **Note that caller owned child objects are transferred in this call and must not be further used.**
@@ -40,6 +82,12 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
     ///  - Result type inference is enabled and cannot be performed.
     fn create(state: &mut OperationState) -> Option<Self> {
         Self::try_from_raw(unsafe { mlirOperationCreate(state.raw_mut()) })
+    }
+
+    /// Creates a deep copy of an operation.
+    /// The operation is *not* inserted and ownership is transferred to the caller.
+    fn deep_copy(&self) -> Self {
+        Self::try_from_raw(unsafe { mlirOperationClone(self.raw()) }).unwrap()
     }
 
     /// Returns pos-th region attached to the operation.
@@ -90,11 +138,7 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
 
     /// Returns the number of successor blocks of the operation.
     fn num_successors(&self) -> usize {
-        unsafe {
-            mlirOperationGetNumSuccessors(self.raw())
-                .try_into()
-                .unwrap()
-        }
+        unsafe { mlirOperationGetNumSuccessors(self.raw()).try_into().unwrap() }
     }
 
     /// Returns pos-th successor of the operation.
@@ -106,15 +150,11 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
 
     /// Returns the number of attributes attached to the operation.
     fn num_attributes(&self) -> usize {
-        unsafe {
-            mlirOperationGetNumAttributes(self.raw())
-                .try_into()
-                .unwrap()
-        }
+        unsafe { mlirOperationGetNumAttributes(self.raw()).try_into().unwrap() }
     }
 
     /// Returns pos-th successor of the operation.
-    fn attribute(&self, pos: usize) -> Option<NamedAttribute> {
+    fn attribute_at(&self, pos: usize) -> Option<NamedAttribute> {
         if pos >= self.num_attributes() {
             return None;
         }
@@ -124,14 +164,14 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
     }
 
     /// Returns an attribute attached to the operation given its name.
-    fn attribute_by_name(&self, name: &str) -> Option<Attribute> {
+    fn attribute(&self, name: &str) -> Option<Attribute> {
         Attribute::try_from_raw(unsafe {
             mlirOperationGetAttributeByName(self.raw(), StringRef::from_str(name).raw())
         })
     }
 
     /// Sets an attribute by name, replacing the existing if it exists or adding a new one otherwise.
-    fn set_attribute_by_name(&self, name: &str, attr: impl Attr) {
+    fn set_attribute(&self, name: &str, attr: impl Attr) {
         unsafe {
             mlirOperationSetAttributeByName(self.raw(), StringRef::from_str(name).raw(), attr.raw())
         }
@@ -139,7 +179,7 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
 
     /// Removes an attribute by name.
     /// Returns false if the attribute was not found and true if removed.
-    fn remove_attribute_by_name(&self, name: &str) -> bool {
+    fn remove_attribute(&self, name: &str) -> bool {
         unsafe { mlirOperationRemoveAttributeByName(self.raw(), StringRef::from_str(name).raw()) }
     }
 
@@ -151,10 +191,9 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
 
         // Prints an operation by sending chunks of the string representation and forwarding userData to callback`.
         // Note that the callback may be called several times with consecutive chunks of the string.
-        let flags = OpPrintingFlags::create().unwrap();
         if with_debug_info {
+            let flags = OwnedOpPrintingFlags::new();
             unsafe {
-                mlirOpPrintingFlagsEnableDebugInfo(flags.raw(), true, true);
                 mlirOperationPrintWithFlags(
                     self.raw(),
                     flags.raw(),
@@ -193,14 +232,10 @@ pub trait Op: WrapRawPtr<RawType = MlirOperation> {
         unsafe { mlirOperationMoveBefore(self.raw(), other.raw()) }
     }
 
-    /// Gets the context this operation is associated with
-    fn context(&self) -> Context {
-        Context::try_from_raw(unsafe { mlirOperationGetContext(self.raw()) }).unwrap()
-    }
-
-    /// Gets the block that owns this operation, returning None if the operation is not owned.
-    fn parent_block(&self) -> Option<Block> {
-        Block::try_from_raw(unsafe { mlirOperationGetBlock(self.raw()) })
+    /// Checks whether two operation handles point to the same operation.
+    /// This does *not* perform deep comparison.
+    fn same_as(&self, other: &impl Op) -> bool {
+        unsafe { mlirOperationEqual(self.raw(), other.raw()) }
     }
 }
 
@@ -375,7 +410,7 @@ mod tests {
         let loc = Location::new_unknown(&ctx);
         let mut state = OperationState::new(hw::ConstantOp::operation_name(), &loc);
         let op: hw::ConstantOp = state.build().unwrap();
-        assert_eq!(op.to_string(), "\"hw.constant\"() : () -> ()\n");
         println!("{:?}", op);
+        assert_eq!(op.to_string(), "\"hw.constant\"() : () -> ()\n");
     }
 }

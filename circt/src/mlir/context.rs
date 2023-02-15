@@ -162,7 +162,6 @@ unsafe extern "C" fn drop_handler<T: HandlerObject>(use_data: *mut std::ffi::c_v
 
 impl Default for Owned<Context> {
     fn default() -> Self {
-        let ctx = Context::create().unwrap();
-        Self(ctx)
+        Self(Context::create())
     }
 }

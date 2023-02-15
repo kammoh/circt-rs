@@ -141,8 +141,8 @@ macro_rules! impl_create {
     ($name:ident $(, $arg:ident:$arg_ty:ty)* ) => {
         paste::paste! {
             impl $name {
-                pub fn create($($arg : $arg_ty, )*) -> Option<Self> {
-                    Self::try_from_raw(unsafe { [<mlir $name Create>]($($arg)*) })
+                pub fn create($($arg : $arg_ty, )*) -> Self {
+                    Self::try_from_raw(unsafe { [<mlir $name Create>]($($arg)*) }).unwrap()
                 }
             }
         }
