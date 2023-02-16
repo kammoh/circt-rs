@@ -1,9 +1,13 @@
 [package]
 name = "circt"
-version = "0.1.0"
+version = "0.0.1"
+authors = [
+    "Kamyar Mohajerani <kammoh@gmail.com>",
+    "Fabian Schuiki <fschuiki@iis.ee.ethz.ch>",
+]
+description = "Rust API for CIRCT"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "Apache-2.0 OR MIT"
 
 [dependencies]
 cached = "0.42.0"
@@ -16,10 +20,7 @@ num-derive = "0.3.3"
 num-traits = "0.2.15"
 paste = "1.0.11"
 quote = "1.0.23"
-readonly = "0.2.3"
 simple-error = "0.2.3"
 thiserror = "1.0.38"
 
-
 [features]
-torture = []

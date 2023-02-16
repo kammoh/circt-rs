@@ -165,6 +165,7 @@ mod tests {
         let ctx = OwnedContext::default();
         let mut builder = OpBuilder::new(&ctx);
 
+        hw::dialect().load(&ctx);
         seq::dialect().load(&ctx);
 
         let region = Region::default();

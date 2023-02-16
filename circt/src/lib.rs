@@ -50,7 +50,7 @@ mod tests {
         hw::dialect().load(&ctx).unwrap();
         mlir::register_cse();
         mlir::register_canonicalize();
-        hw::register_passes();
+        hw::register_hw_passes();
         hw::register_arith_passes();
         seq::register_passes();
         fsm::register_passes();
@@ -92,8 +92,7 @@ mod tests {
             },
         )?;
 
-        // let pm = OwnedPassManager::new(&ctx);
-        let pm = PassManager::new(&ctx);
+        let pm = OwnedPassManager::new(&ctx);
         pm.enable_verifier(true);
 
         #[rustfmt::skip]

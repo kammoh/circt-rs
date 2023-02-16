@@ -1,4 +1,6 @@
-use cargo_emit::{rerun_if_changed, rustc_link_lib, rustc_link_search, warning};
+use cargo_emit::{
+    rerun_if_changed, rerun_if_env_changed, rustc_link_lib, rustc_link_search, warning,
+};
 
 use miette::{IntoDiagnostic, Result};
 
@@ -6,106 +8,152 @@ use std::{
     collections::HashMap,
     env,
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
-static CIRCT_DEP_SCRIPTS: [&str; 2] = [
-    // need CAPNP_VER=0.9.2 on macos
-    "utils/get-capnp.sh",
-    "utils/get-or-tools.sh",
-];
-
 fn main() -> Result<()> {
     let cargo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    rerun_if_changed!(cargo_root.join("build.rs").to_str().unwrap());
-
-    let lib_src = cargo_root.join("src/lib.rs");
-    rerun_if_changed!(lib_src.to_str().unwrap());
-
-    let build_circt = env::var("BUILD_CIRCT")
-        .ok()
-        .and_then(|s| s.parse::<bool>().ok())
-        .unwrap_or(false);
-    let build_type = std::env::var("CIRCT_BUILD_TYPE").unwrap_or("Release".to_string());
-    let generator = std::env::var("CMAKE_GENERATOR").unwrap_or("Ninja".to_string());
+    rerun_if_changed!(cargo_root.join("build.rs").display());
 
     let circt_src_dir = &cargo_root.join("circt");
-    let circt_install_dir = &cargo_root.join("circt_build");
-    let llvm_src_dir = &circt_src_dir.join("llvm/llvm");
 
-    let include_dir = &circt_install_dir.join("include");
+    let circt_install_dir = if env::var("BUILD_CIRCT")
+        .ok()
+        .and_then(|s| {
+            s.to_lowercase()
+                .parse::<bool>()
+                .ok()
+                .or_else(|| s.parse::<u8>().ok().map(|i| i != 0))
+        })
+        .unwrap_or(false)
+    {
+        warning!("Building CIRCT from source");
+        build_circt(circt_src_dir)?
+    } else {
+        PathBuf::new()
+    };
+    rerun_if_env_changed!("BUILD_CIRCT");
+
     let lib_dir = &circt_install_dir.join("lib");
+    let include_dir = &circt_install_dir.join("include");
+
+    link_libs(lib_dir)?;
+
     let bindings_dir = cargo_root.join("bindings");
     std::fs::create_dir_all(&bindings_dir).into_diagnostic()?;
 
+    rerun_if_changed!("wrapper.h");
+    bindgen::Builder::default()
+        .header("wrapper.h")
+        .generate_block(true)
+        .clang_args(&["-I", include_dir.to_str().unwrap()])
+        .generate()
+        .expect("Unable to generate bindings")
+        .write_to_file(&bindings_dir.join("bindings.rs"))
+        .expect("Couldn't write bindings!");
+
+    // Additional wrapper code
+    rerun_if_changed!("wrapper.cpp");
+    cc::Build::new()
+        .cpp(true)
+        .file("wrapper.cpp")
+        .flag("-std=c++17")
+        .include(include_dir)
+        .warnings(false)
+        .extra_warnings(false)
+        .compile("circt-sys-wrapper");
+
+    Ok(())
+}
+
+fn build_circt(circt_src_dir: &Path) -> Result<PathBuf> {
+    let circt_install_dir = circt_src_dir.parent().unwrap().join("circt_bin");
+    let cmake_build_dir = circt_src_dir;
+    let llvm_src_dir = circt_src_dir.join("llvm/llvm");
+
+    let build_type = std::env::var("CIRCT_BUILD_TYPE").unwrap_or("Release".to_string());
+    rerun_if_env_changed!("CIRCT_BUILD_TYPE");
+    let generator = std::env::var("CMAKE_GENERATOR").unwrap_or("Ninja".to_string());
     let num_jobs = num_cpus::get();
+    warning!("Checking out git submodule...");
+    Command::new("git")
+        .args(["submodule", "update", "--init", "--recursive"])
+        .current_dir(circt_src_dir)
+        .status()
+        .expect("git submodule update failed!");
 
-    if build_circt {
-        warning!("Checking out git submodule...");
-        Command::new("git")
-            .args([
-                "submodule",
-                "update",
-                "--init",
-                "--recursive",
-                circt_src_dir.to_str().unwrap(),
-            ])
-            .current_dir(cargo_root)
-            .status()
-            .expect("git submodule update failed!");
+    let env = HashMap::from([
+        (
+            "MAKEFLAGS",
+            std::env::var("MAKEFLAGS").unwrap_or("".to_string()) + &format!(" -j {num_jobs}"),
+        ),
+        (
+            "CMAKE_BUILD_PARALLEL_LEVEL",
+            std::env::var("CMAKE_BUILD_PARALLEL_LEVEL").unwrap_or(num_jobs.to_string()),
+        ),
+    ]);
 
-        let env = HashMap::from([
-            ("MAKEFLAGS", format!("-j {num_jobs}")),
-            ("CMAKE_BUILD_PARALLEL_LEVEL", format!("{num_jobs}")),
-        ]);
+    static CIRCT_DEP_SCRIPTS: [&str; 2] = [
+        // need CAPNP_VER=0.9.2 on macos
+        "utils/get-capnp.sh",
+        "utils/get-or-tools.sh",
+    ];
 
-        for sh_script in CIRCT_DEP_SCRIPTS {
-            let mut child = Command::new("bash")
-                .arg(circt_src_dir.join(sh_script).to_str().unwrap())
-                .stdin(Stdio::piped())
-                .current_dir(circt_src_dir)
-                .envs(&env)
-                .spawn()
-                .unwrap_or_else(|_| panic!("Failed to run script: {sh_script}"));
-            child
-                .stdin
-                .as_mut()
-                .unwrap()
-                .write_all("yes".as_bytes())
-                .unwrap_or_else(|_| panic!("Failed write `yes` to stdin of script: {sh_script}"));
-            assert!(child
-                .wait()
-                .unwrap_or_else(|_| panic!("Failed wait for script: {sh_script}"))
-                .success());
-        }
-        warning!("Done building dependencies!");
+    for sh_script in CIRCT_DEP_SCRIPTS {
+        let mut child = Command::new("bash")
+            .arg(circt_src_dir.join(sh_script).to_str().unwrap())
+            .stdin(Stdio::piped())
+            .current_dir(circt_src_dir)
+            .envs(&env)
+            .spawn()
+            .unwrap_or_else(|_| panic!("Failed to run script: {sh_script}"));
+        child
+            .stdin
+            .as_mut()
+            .unwrap()
+            .write_all("yes".as_bytes())
+            .unwrap_or_else(|_| panic!("Failed write `yes` to stdin of script: {sh_script}"));
+        assert!(child
+            .wait()
+            .unwrap_or_else(|_| panic!("Failed wait for script: {sh_script}"))
+            .success());
+    }
+    warning!("Done building dependencies!");
 
-        warning!("Building LLVM... (this could take a long time!)");
-        if !&circt_install_dir.exists() {
-            std::fs::create_dir_all(circt_install_dir).into_diagnostic()?;
-        }
-        cmake::Config::new(llvm_src_dir)
-            .define("LLVM_TARGETS_TO_BUILD", "host")
-            .define("LLVM_ENABLE_PROJECTS", "mlir")
-            .define("LLVM_EXTERNAL_PROJECTS", "circt")
-            .define("LLVM_EXTERNAL_CIRCT_SOURCE_DIR", circt_src_dir)
-            .define("MLIR_INSTALL_AGGREGATE_OBJECTS", "OFF")
-            .define("LLVM_ENABLE_ASSERTIONS", "ON")
-            .define("CMAKE_EXPORT_COMPILE_COMMANDS", "ON")
-            .define("CIRCT_BINDINGS_PYTHON_ENABLED", "ON")
-            .define("CIRCT_ENABLE_FRONTENDS", "PyCDE")
-            .define("CMAKE_BUILD_TYPE", build_type)
-            .define("ENABLE_LTO", "ON")
-            .out_dir(circt_install_dir)
-            .generator(generator)
-            .build();
-    };
+    warning!("Building CIRCT... (this could take a long time!)");
+    if !&circt_install_dir.exists() {
+        std::fs::create_dir_all(&circt_install_dir).into_diagnostic()?;
+    }
 
+    cmake::Config::new(llvm_src_dir)
+        .define("LLVM_TARGETS_TO_BUILD", "host")
+        .define("LLVM_ENABLE_PROJECTS", "mlir")
+        .define("LLVM_EXTERNAL_PROJECTS", "circt")
+        .define("LLVM_EXTERNAL_CIRCT_SOURCE_DIR", circt_src_dir)
+        .define("MLIR_INSTALL_AGGREGATE_OBJECTS", "OFF")
+        .define("LLVM_ENABLE_ASSERTIONS", "ON")
+        // .define("CMAKE_EXPORT_COMPILE_COMMANDS", "ON")
+        // .define("CIRCT_BINDINGS_PYTHON_ENABLED", "ON")
+        // .define("CIRCT_ENABLE_FRONTENDS", "PyCDE")
+        .define("CMAKE_BUILD_TYPE", build_type)
+        .define("CMAKE_INSTALL_PREFIX", &circt_install_dir)
+        .define("ENABLE_LTO", "ON")
+        .cxxflag("-Wno-deprecated-declarations")
+        .cflag("-Wno-deprecated-declarations")
+        .out_dir(&cmake_build_dir)
+        .generator(generator)
+        .build();
+    Ok(circt_install_dir)
+}
+
+fn link_libs(lib_dir: &Path) -> Result<()> {
     rustc_link_search!(lib_dir.to_str().unwrap() => "native");
 
     let lib_names = [
         "LLVMCore",
+        "LLVMTargetParser",
+        "LLVMBinaryFormat",
         "LLVMDemangle",
         "LLVMSupport",
         "MLIRSupport",
@@ -187,6 +235,7 @@ fn main() -> Result<()> {
     for lib in lib_names {
         rustc_link_lib!(lib => "static");
     }
+
     let os = env::var_os("CARGO_CFG_TARGET_OS")
         .and_then(|s| s.into_string().ok())
         .unwrap_or_default();
@@ -194,14 +243,17 @@ fn main() -> Result<()> {
     match os.as_str() {
         "macos" => {
             rustc_link_lib!("c++");
-
-            if let Ok(prefix) = env::var("HOMEBREW_PREFIX") {
-                rustc_link_search!(format!("{prefix}/lib") => "native");
-            }
+            rerun_if_env_changed!("HOMEBREW_PREFIX");
+            let brew_prefix = env::var("HOMEBREW_PREFIX").unwrap_or("/opt/homebrew".to_string());
+            rustc_link_search!(format!("{brew_prefix}/lib") => "native");
         }
-        "linux" => rustc_link_lib!("stdc++"),
+        "linux" => {
+            rustc_link_lib!("stdc++");
+            rustc_link_search!(format!("/usr/local/lib64") => "native");
+        }
         _ => {}
     }
+    rustc_link_search!(format!("/usr/local/lib") => "native");
 
     if let Ok(library) = pkg_config::probe_library("ncurses") {
         for p in library.link_paths {
@@ -215,40 +267,17 @@ fn main() -> Result<()> {
             rustc_link_search!(p.display());
         }
     } else {
-        // panic!("pkg-cinfig failed");
         match os.as_str() {
             "macos" => {
-                let p = "/opt/homebrew/opt/ncurses/lib";
-                rustc_link_search!(p => "static");
-                rustc_link_search!(p);
+                if let Ok(brew_prefix) = env::var("HOMEBREW_PREFIX") {
+                    let p = format!("{brew_prefix}/opt/ncurses/lib");
+                    rustc_link_search!(p => "static");
+                    rustc_link_search!(p => "native");
+                }
             }
             _ => {}
         }
     }
     rustc_link_lib!("ncurses" => "static");
-
-    rerun_if_changed!("wrapper.h");
-    bindgen::Builder::default()
-        .header("wrapper.h")
-        .generate_block(true)
-        .clang_args(&["-I", include_dir.to_str().unwrap()])
-        .generate()
-        .expect("Unable to generate bindings")
-        .write_to_file(&bindings_dir.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
-
-    let cpp_std = "-std=c++17";
-
-    // Additional wrapper code
-    rerun_if_changed!("wrapper.cpp");
-    cc::Build::new()
-        .cpp(true)
-        .file("wrapper.cpp")
-        .flag_if_supported(cpp_std)
-        .include(include_dir)
-        .warnings(false)
-        .extra_warnings(false)
-        .compile("circt-sys-wrapper");
-
     Ok(())
 }

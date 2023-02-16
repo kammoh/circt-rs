@@ -21,7 +21,7 @@ pub fn register_arith_passes() {
     unsafe { registerHWArithPasses() }
 }
 
-pub fn register_passes() {
+pub fn register_hw_passes() {
     unsafe { registerHWPasses() }
 }
 
@@ -67,7 +67,7 @@ mod tests {
         assert_eq!(ctx.num_loaded_dialects(), 3);
         assert_eq!(seq, seq2);
 
-        hw::register_passes();
+        hw::register_hw_passes();
         seq::register_passes();
     }
 }

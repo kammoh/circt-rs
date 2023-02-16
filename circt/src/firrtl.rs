@@ -34,7 +34,7 @@ mod tests {
     #[test]
     fn test_firtool() -> miette::Result<()> {
         let ctx = OwnedContext::default();
-        hw::register_passes();
+        hw::register_hw_passes();
         hw::register_arith_passes();
         seq::register_passes();
         sv::register_passes();

@@ -408,6 +408,7 @@ mod tests {
     fn test_print_op() {
         let ctx = OwnedContext::default();
         let loc = Location::new_unknown(&ctx);
+        hw::dialect().load(&ctx);
         let mut state = OperationState::new(hw::ConstantOp::operation_name(), &loc);
         let op: hw::ConstantOp = state.build().unwrap();
         println!("{:?}", op);
