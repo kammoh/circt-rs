@@ -13,12 +13,23 @@ use std::{
 };
 
 fn main() -> Result<()> {
-    let cargo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let cargo_root = Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().into_diagnostic()?;
     rerun_if_changed!(cargo_root.join("build.rs").display());
 
-    let circt_src_dir = &cargo_root.join("circt");
+    let circt_src_dir = &env::var("CIRCT_SRC_DIR")
+        .map(|e| PathBuf::from(&e))
+        .unwrap_or(cargo_root.join("circt"))
+        .canonicalize()
+        .into_diagnostic()?;
 
-    let circt_install_dir = if env::var("BUILD_CIRCT")
+    let circt_prefix = if let Ok(prefix) = env::var("CIRCT_INSTALL_PREFIX") {
+        PathBuf::from(prefix).canonicalize().into_diagnostic()?
+    } else {
+        circt_src_dir.parent().unwrap().join("install")
+    };
+    rerun_if_env_changed!("CIRCT_INSTALL_PREFIX");
+
+    if env::var("BUILD_CIRCT")
         .ok()
         .and_then(|s| {
             s.to_lowercase()
@@ -28,15 +39,14 @@ fn main() -> Result<()> {
         })
         .unwrap_or(false)
     {
-        warning!("Building CIRCT from source");
-        build_circt(circt_src_dir)?
-    } else {
-        PathBuf::new()
-    };
+        warning!("Building CIRCT from {}", circt_src_dir.display());
+        rerun_if_env_changed!("CIRCT_SRC_DIR");
+        build_circt(circt_src_dir, &circt_prefix)?;
+    }
     rerun_if_env_changed!("BUILD_CIRCT");
 
-    let lib_dir = &circt_install_dir.join("lib");
-    let include_dir = &circt_install_dir.join("include");
+    let lib_dir = &circt_prefix.join("lib");
+    let include_dir = &circt_prefix.join("include");
 
     link_libs(lib_dir)?;
 
@@ -46,7 +56,9 @@ fn main() -> Result<()> {
     rerun_if_changed!("wrapper.h");
     bindgen::Builder::default()
         .header("wrapper.h")
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate_block(true)
+        .generate_inline_functions(true)
         .clang_args(&["-I", include_dir.to_str().unwrap()])
         .generate()
         .expect("Unable to generate bindings")
@@ -67,9 +79,8 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn build_circt(circt_src_dir: &Path) -> Result<PathBuf> {
-    let circt_install_dir = circt_src_dir.parent().unwrap().join("circt_bin");
-    let cmake_build_dir = circt_src_dir;
+fn build_circt(circt_src_dir: &Path, circt_install_dir: &Path) -> Result<()> {
+    let cmake_build_dir = circt_src_dir.parent().unwrap().join("circt_build");
     let llvm_src_dir = circt_src_dir.join("llvm/llvm");
 
     let build_type = std::env::var("CIRCT_BUILD_TYPE").unwrap_or("Release".to_string());
@@ -94,13 +105,12 @@ fn build_circt(circt_src_dir: &Path) -> Result<PathBuf> {
         ),
     ]);
 
-    static CIRCT_DEP_SCRIPTS: [&str; 2] = [
-        // need CAPNP_VER=0.9.2 on macos
-        "utils/get-capnp.sh",
-        "utils/get-or-tools.sh",
+    let build_dep_scripts: Vec<&str> = vec![
+        // "utils/get-capnp.sh", // need CAPNP_VER=0.9.2 on macos
+        // "utils/get-or-tools.sh",
     ];
 
-    for sh_script in CIRCT_DEP_SCRIPTS {
+    for sh_script in build_dep_scripts {
         let mut child = Command::new("bash")
             .arg(circt_src_dir.join(sh_script).to_str().unwrap())
             .stdin(Stdio::piped())
@@ -127,28 +137,33 @@ fn build_circt(circt_src_dir: &Path) -> Result<PathBuf> {
     }
 
     cmake::Config::new(llvm_src_dir)
+        .define("CMAKE_BUILD_TYPE", build_type)
+        .define("CMAKE_C_COMPILER", "clang")
+        .define("CMAKE_CXX_COMPILER", "clang++")
+        .define("CMAKE_INSTALL_PREFIX", &circt_install_dir)
         .define("LLVM_TARGETS_TO_BUILD", "host")
         .define("LLVM_ENABLE_PROJECTS", "mlir")
         .define("LLVM_EXTERNAL_PROJECTS", "circt")
         .define("LLVM_EXTERNAL_CIRCT_SOURCE_DIR", circt_src_dir)
         .define("MLIR_INSTALL_AGGREGATE_OBJECTS", "OFF")
-        .define("LLVM_ENABLE_ASSERTIONS", "ON")
-        // .define("CMAKE_EXPORT_COMPILE_COMMANDS", "ON")
-        // .define("CIRCT_BINDINGS_PYTHON_ENABLED", "ON")
-        // .define("CIRCT_ENABLE_FRONTENDS", "PyCDE")
-        .define("CMAKE_BUILD_TYPE", build_type)
-        .define("CMAKE_INSTALL_PREFIX", &circt_install_dir)
-        .define("ENABLE_LTO", "ON")
+        .define("LLVM_ENABLE_ASSERTIONS", "OFF")
+        .define("LLVM_ENABLE_BINDINGS", "OFF")
+        .define("LLVM_ENABLE_OCAMLDOC", "OFF")
+        .define("LLVM_INSTALL_UTILS", "ON")
+        .define("LLVM_OPTIMIZED_TABLEGEN", "ON")
+        .define("LLVM_STATIC_LINK_CXX_STDLIB", "ON")
+        .define("LLVM_ENABLE_TERMINFO", "OFF")
+        .define("VERILATOR_DISABLE", "ON")
         .cxxflag("-Wno-deprecated-declarations")
         .cflag("-Wno-deprecated-declarations")
         .out_dir(&cmake_build_dir)
         .generator(generator)
         .build();
-    Ok(circt_install_dir)
+    Ok(())
 }
 
 fn link_libs(lib_dir: &Path) -> Result<()> {
-    rustc_link_search!(lib_dir.to_str().unwrap() => "native");
+    rustc_link_search!(lib_dir.to_str().unwrap());
 
     let lib_names = [
         "LLVMCore",
@@ -191,7 +206,6 @@ fn link_libs(lib_dir: &Path) -> Result<()> {
         "MLIRMemRefDialect",
         "MLIRMemRefTransforms",
         "MLIRMemRefTransformOps",
-        "MLIRMemRefUtils",
         "MLIRArithTransforms",
         "MLIRArithDialect",
         "MLIRArithUtils",
@@ -243,41 +257,13 @@ fn link_libs(lib_dir: &Path) -> Result<()> {
     match os.as_str() {
         "macos" => {
             rustc_link_lib!("c++");
-            rerun_if_env_changed!("HOMEBREW_PREFIX");
-            let brew_prefix = env::var("HOMEBREW_PREFIX").unwrap_or("/opt/homebrew".to_string());
-            rustc_link_search!(format!("{brew_prefix}/lib") => "native");
+            rustc_link_lib!("curses");
         }
         "linux" => {
             rustc_link_lib!("stdc++");
-            rustc_link_search!(format!("/usr/local/lib64") => "native");
+            rustc_link_lib!("ncurses");
         }
         _ => {}
     }
-    rustc_link_search!(format!("/usr/local/lib") => "native");
-
-    if let Ok(library) = pkg_config::probe_library("ncurses") {
-        for p in library.link_paths {
-            warning!("Adding library path: {}", p.display());
-            rustc_link_search!(p.display() => "static");
-            rustc_link_search!(p.display());
-        }
-        for p in library.framework_paths {
-            warning!("Adding framework path: {}", p.display());
-            rustc_link_search!(p.display() => "static");
-            rustc_link_search!(p.display());
-        }
-    } else {
-        match os.as_str() {
-            "macos" => {
-                if let Ok(brew_prefix) = env::var("HOMEBREW_PREFIX") {
-                    let p = format!("{brew_prefix}/opt/ncurses/lib");
-                    rustc_link_search!(p => "static");
-                    rustc_link_search!(p => "native");
-                }
-            }
-            _ => {}
-        }
-    }
-    rustc_link_lib!("ncurses" => "static");
     Ok(())
 }

@@ -1,6 +1,9 @@
 // Copyright (c) 2016-2021 Fabian Schuiki
 // Copyright (c) 2022-2023 Kamyar Mohajerani
 
+//! The comb dialect provides a common set of operations for combinational logic.
+//! This dialect is designed to allow easy analysis and transformation.
+
 use crate::crate_prelude::*;
 use simple_error::SimpleError;
 use std::borrow::Borrow;

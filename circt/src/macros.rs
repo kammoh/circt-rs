@@ -156,7 +156,7 @@ macro_rules! def_type {
             wrap_raw_ptr!($name => MlirType, Clone, Copy $(; doc=$doc)?);
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    self.format(f)
+                    self.print(f)
                 }
             }
 
@@ -205,8 +205,54 @@ macro_rules! def_type {
     };
 }
 
+macro_rules! impl_mlir_print_fn {
+    ($name:ident) => {
+        paste::paste!{
+            fn print(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                let formatter = FormatterCallback::new(f);
+                unsafe { [<mlir $name Print>](self.raw(), formatter.callback(), formatter.user_data()) };
+                Ok(())
+            }
+        }
+    };
+}
+macro_rules! impl_display_debug {
+    ($name:ident) => {
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                self.print(f)
+            }
+        }
+        
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", self)
+            }
+        }
+    };
+}
+
+macro_rules! impl_mlir_print {
+    ($name:ident) => {
+        impl $name{
+            impl_mlir_print_fn!($name);
+        }
+        impl_display_debug!($name);
+    };
+}
+
 macro_rules! def_attr {
-    ($name:ident $(, $derives:ident)* ) => {
+    (hw :: $name:ident $(, $derives:ident)* ) => {
+        def_attr!(hw :: $name [$name:Attr]  $(, $derives)* );
+    };
+    ($ns:ident :: $name:ident $(, $derives:ident)* ) => {
+        def_attr!($ns :: $name [$name:Attribute]  $(, $derives)* );
+    };
+    ($ns:ident :: $name:ident [$isa_name:ident] $(, $derives:ident)* ) => {
+        def_attr!($ns :: $name [$isa_name:Attribute]  $(, $derives)* );
+    };
+    ($ns:ident :: $name:ident [$isa_name:ident : $isa_kind:ident] $(, $derives:ident)* ) => {
         wrap_raw_ptr!($name => MlirAttribute $(, $derives)*);
 
         impl From<$name> for Attribute {
@@ -226,6 +272,27 @@ macro_rules! def_attr {
                 }
             }
         }
+
+        impl AttrIsa for $name {
+            impl_isa!($ns :: $isa_name => $isa_kind);
+        }
+    };
+    ($name:ident $([$isa_name:ident $(:$isa_kind:ident)?])? $(, $derives:ident)* ) => {
+        def_attr!(mlir:: $name $([$isa_name $(:$isa_kind)? ])? $(, $derives)* );
+    };
+}
+
+macro_rules! impl_isa {
+    ($ns:ident :: $name:ident => $kind:ident) => {
+        // #[doc = "Checks whether the given `" $kind "` is a `" $name "`"]
+        fn isa(attr: &impl Attr) -> bool {
+            paste::paste!{
+                unsafe { [< $ns:lower $kind IsA $name>](attr.raw()) }
+            }
+        }
+    };
+    ($name:ident => $kind:ident) => {
+        impl_isa!(mlir::$name => $kind );
     };
 }
 

@@ -24,17 +24,13 @@ impl NamedAttribute {
     }
 
     pub fn try_from_raw(raw: <Self as HasRaw>::RawType) -> Option<Self> {
-        raw.attribute
-            .ptr
-            .is_null()
-            .not()
-            .then_some(Self::from_raw(raw))
+        raw.attribute.ptr.is_null().not().then_some(Self::from_raw(raw))
     }
 }
 
 impl Display for Attribute {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.attr_fmt(f)
+        self.print(f)
     }
 }
 
@@ -74,13 +70,7 @@ pub trait Attr: WrapRawPtr<RawType = MlirAttribute> {
         })
     }
 
-    /// Prints an attribute by sending chunks of the string representation and forwarding userData to callback`.
-    /// Note that the callback may be called several times with consecutive chunks of the string.
-    fn attr_fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let formatter = FormatterCallback::new(f);
-        unsafe { mlirAttributePrint(self.raw(), formatter.callback(), formatter.user_data()) };
-        Ok(())
-    }
+    impl_mlir_print_fn!(Attribute);
 }
 
 impl<T> Attr for T where T: WrapRawPtr<RawType = MlirAttribute> {}
@@ -91,7 +81,7 @@ pub trait AttrIsa: Attr {
     }
 }
 
-def_attr!(ArrayAttr);
+def_attr!(ArrayAttr [Array]);
 
 impl ArrayAttr {
     /// Creates an array element containing the given list of elements in the given context.
@@ -104,14 +94,7 @@ impl ArrayAttr {
     }
 }
 
-impl AttrIsa for ArrayAttr {
-    /// Checks whether the given attribute is an array attribute.
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { mlirAttributeIsAArray(attr.raw()) }
-    }
-}
-
-def_attr!(DictionaryAttr);
+def_attr!(DictionaryAttr [Dictionary]);
 
 impl DictionaryAttr {
     pub fn new(
@@ -134,21 +117,7 @@ impl DictionaryAttr {
     }
 }
 
-impl AttrIsa for DictionaryAttr {
-    /// Checks whether the given attribute is a dictionary attribute.
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { mlirAttributeIsADictionary(attr.raw()) }
-    }
-}
-
-def_attr!(IntegerAttr);
-
-impl AttrIsa for IntegerAttr {
-    /// Checks whether the given attribute is an integer attribute.
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { mlirAttributeIsAInteger(attr.raw()) }
-    }
-}
+def_attr!(IntegerAttr [Integer], Clone);
 
 impl IntegerAttr {
     pub fn new(ty: &impl Ty, value: impl Into<i64>) -> Self {
@@ -169,16 +138,9 @@ impl IntegerAttr {
     }
 }
 
-def_attr!(OpaqueAttr);
+def_attr!(OpaqueAttr [Opaque]);
 
-impl AttrIsa for OpaqueAttr {
-    /// Checks whether the given attribute is an opaque attribute.
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { mlirAttributeIsAOpaque(attr.raw()) }
-    }
-}
-
-def_attr!(StringAttr, Clone);
+def_attr!(StringAttr [String], Clone);
 
 impl StringAttr {
     /// Creates a string attribute in the given context containing the given string.
@@ -206,14 +168,7 @@ impl StringAttr {
     }
 }
 
-impl AttrIsa for StringAttr {
-    /// Checks whether the given attribute is an integer attribute.
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { mlirAttributeIsAString(attr.raw()) }
-    }
-}
-
-def_attr!(SymbolRefAttr);
+def_attr!(SymbolRefAttr [SymbolRef]);
 
 impl SymbolRefAttr {
     /// Creates a flat symbol reference attribute in the given context referencing a symbol identified by the given string.
@@ -223,14 +178,7 @@ impl SymbolRefAttr {
     }
 }
 
-impl AttrIsa for SymbolRefAttr {
-    /// Checks whether the given attribute is a symbol reference attribute.
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { mlirAttributeIsASymbolRef(attr.raw()) }
-    }
-}
-
-def_attr!(TypeAttr);
+def_attr!(TypeAttr [Type]);
 
 impl TypeAttr {
     /// Creates a type attribute wrapping the given type in the same context as the type.
@@ -244,14 +192,7 @@ impl TypeAttr {
     }
 }
 
-impl AttrIsa for TypeAttr {
-    /// Checks whether the given attribute is a type attribute.
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { mlirAttributeIsAType(attr.raw()) }
-    }
-}
-
-def_attr!(UnitAttr);
+def_attr!(UnitAttr [Unit]);
 
 impl UnitAttr {
     /// Creates a unit attribute in the given context.
@@ -260,9 +201,4 @@ impl UnitAttr {
     }
 }
 
-impl AttrIsa for UnitAttr {
-    /// Checks whether the given attribute is a unit attribute.
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { mlirAttributeIsAUnit(attr.raw()) }
-    }
-}
+def_attr!(LocationAttr[Location]);

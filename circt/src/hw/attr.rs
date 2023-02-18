@@ -3,7 +3,7 @@
 use crate::crate_prelude::*;
 use circt_sys::*;
 
-def_attr!(GlobalRefAttr);
+def_attr!(hw::GlobalRefAttr);
 
 impl GlobalRefAttr {
     pub fn new(sym_name: StringAttr) -> Option<Self> {
@@ -11,13 +11,7 @@ impl GlobalRefAttr {
     }
 }
 
-impl AttrIsa for GlobalRefAttr {
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { hwAttrIsAGlobalRefAttr(attr.raw()) }
-    }
-}
-
-def_attr!(InnerRefAttr);
+def_attr!(hw::InnerRefAttr);
 
 /// Encapsulates references to inner symbols.
 /// This attribute stores the parent symbol and the inner symbol, providing a uniform type for storing and manipulating references to inner symbols.
@@ -36,13 +30,8 @@ impl InnerRefAttr {
     }
 }
 
-impl AttrIsa for InnerRefAttr {
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { hwAttrIsAInnerRefAttr(attr.raw()) }
-    }
-}
 
-def_attr!(ParamDeclAttr);
+def_attr!(hw::ParamDeclAttr);
 
 impl ParamDeclAttr {
     pub fn new(name: &str, ty: impl Ty, value: impl Attr) -> Self {
@@ -65,13 +54,7 @@ impl ParamDeclAttr {
     }
 }
 
-impl AttrIsa for ParamDeclAttr {
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { hwAttrIsAParamDeclAttr(attr.raw()) }
-    }
-}
-
-def_attr!(ParamDeclRefAttr);
+def_attr!(hw::ParamDeclRefAttr);
 
 impl ParamDeclRefAttr {
     pub fn new(ctx: &Context, name: &str) -> Self {
@@ -90,22 +73,10 @@ impl ParamDeclRefAttr {
     }
 }
 
-impl AttrIsa for ParamDeclRefAttr {
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { hwAttrIsAParamDeclRefAttr(attr.raw()) }
-    }
-}
-
-def_attr!(ParamVerbatimAttr);
+def_attr!(hw::ParamVerbatimAttr);
 
 impl ParamVerbatimAttr {
     pub fn new(text: StringAttr) -> Self {
         Self::try_from_raw(unsafe { hwParamVerbatimAttrGet(text.raw()) }).unwrap()
-    }
-}
-
-impl AttrIsa for ParamVerbatimAttr {
-    fn isa(attr: &impl Attr) -> bool {
-        unsafe { hwAttrIsAParamVerbatimAttr(attr.raw()) }
     }
 }

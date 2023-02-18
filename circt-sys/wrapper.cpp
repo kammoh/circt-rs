@@ -4,16 +4,31 @@
 #include "mlir/CAPI/Pass.h"
 #include "mlir/CAPI/Registration.h"
 #include "mlir/Transforms/Passes.h"
-#include "mlir/Transforms/ViewOpGraph.h"
+
 #include "circt/Transforms/Passes.h"
 #include "circt/Conversion/Passes.h"
-#include "circt/Dialect/FIRRTL/Passes.h"
-#include "circt/Dialect/Seq/SeqPasses.h"
+#include "circt/InitAllPasses.h"
+#include "circt/Support/LoweringOptions.h"
+#include "circt/Support/Version.h"
+#include "circt/Dialect/Pipeline/Pipeline.h"
 #include "circt/Dialect/HW/HWPasses.h"
-#include "circt/Dialect/Pipeline/PipelinePasses.h"
-#include "circt/Dialect/Handshake/HandshakePasses.h"
+#include "circt/Dialect/HW/HWDialect.h"
+#include "circt/Dialect/HWArith/HWArithDialect.h"
+#include "circt/Dialect/Comb/CombDialect.h"
+#include "circt/Dialect/Seq/SeqPasses.h"
+#include "circt/Dialect/Seq/SeqDialect.h"
 #include "circt/Dialect/FSM/FSMPasses.h"
+#include "circt/Dialect/FSM/FSMOps.h"
+#include "circt/Dialect/Pipeline/PipelinePasses.h"
+#include "circt/Dialect/Handshake/HandshakeDialect.h"
+#include "circt/Dialect/Interop/InteropDialect.h"
+#include "circt/Dialect/ESI/ESIDialect.h"
+#include "circt/Dialect/FIRRTL/Passes.h"
+#include "circt/Dialect/FIRRTL/CHIRRTLDialect.h"
+#include "circt/Dialect/FIRRTL/FIRRTLDialect.h"
+#include "circt/Dialect/Handshake/HandshakePasses.h"
 #include "circt/Dialect/SV/SVPasses.h"
+#include "circt/Dialect/SV/SVDialect.h"
 // #include "circt/Conversion/ExportVerilog.h"
 
 using namespace llvm;
@@ -57,7 +72,7 @@ MlirPass mlirCreateTransformsCSE() {
   return wrap(mlir::createCSEPass().release());
 }
 void mlirRegisterTransformsCSE() {
-  registerCSE();
+  mlir::registerCSEPass();
 }
 
 MlirPass seqCreateSeqLowerToSVPass() {
@@ -75,7 +90,7 @@ MlirPass mlirCreateTransformsCanonicalizer() {
   return wrap(mlir::createCanonicalizerPass().release());
 }
 void mlirRegisterTransformsCanonicalizer() {
-  registerCanonicalizer();
+  mlir::registerCanonicalizer();
 }
 
 
@@ -83,7 +98,7 @@ MlirPass mlirCreateTransformsControlFlowSink() {
   return wrap(::mlir::createControlFlowSinkPass().release());
 }
 void mlirRegisterTransformsControlFlowSink() {
-  registerControlFlowSink();
+  mlir::registerControlFlowSink();
 }
 
 
@@ -91,7 +106,7 @@ MlirPass mlirCreateTransformsGenerateRuntimeVerification() {
   return wrap(mlir::createGenerateRuntimeVerificationPass().release());
 }
 void mlirRegisterTransformsGenerateRuntimeVerification() {
-  registerGenerateRuntimeVerification();
+  mlir::registerGenerateRuntimeVerification();
 }
 
 
@@ -99,7 +114,7 @@ MlirPass mlirCreateTransformsInliner() {
   return wrap(mlir::createInlinerPass().release());
 }
 void mlirRegisterTransformsInliner() {
-  registerInliner();
+  mlir::registerInliner();
 }
 
 
@@ -107,7 +122,7 @@ MlirPass mlirCreateTransformsLocationSnapshot() {
   return wrap(mlir::createLocationSnapshotPass().release());
 }
 void mlirRegisterTransformsLocationSnapshot() {
-  registerLocationSnapshot();
+  mlir::registerLocationSnapshot();
 }
 
 
@@ -115,7 +130,7 @@ MlirPass mlirCreateTransformsLoopInvariantCodeMotion() {
   return wrap(mlir::createLoopInvariantCodeMotionPass().release());
 }
 void mlirRegisterTransformsLoopInvariantCodeMotion() {
-  registerLoopInvariantCodeMotion();
+  mlir::registerLoopInvariantCodeMotion();
 }
 
 
@@ -123,7 +138,7 @@ MlirPass mlirCreateTransformsPrintOpStats() {
   return wrap(mlir::createPrintOpStatsPass().release());
 }
 void mlirRegisterTransformsPrintOpStats() {
-  registerPrintOpStats();
+  mlir::registerPrintOpStats();
 }
 
 
@@ -132,7 +147,7 @@ MlirPass mlirCreateTransformsSCCP() {
 }
 
 void mlirRegisterTransformsSCCP() {
-  registerSCCP();
+  mlir::registerSCCP();
 }
 
 
@@ -147,7 +162,7 @@ MlirPass mlirCreateTransformsSymbolDCE() {
   return wrap(mlir::createSymbolDCEPass().release());
 }
 void mlirRegisterTransformsSymbolDCE() {
-  registerSymbolDCE();
+  mlir::registerSymbolDCE();
 }
 
 
@@ -155,7 +170,7 @@ MlirPass mlirCreateTransformsSymbolPrivatize() {
   return wrap(mlir::createSymbolPrivatizePass().release());
 }
 void mlirRegisterTransformsSymbolPrivatize() {
-  registerSymbolPrivatize();
+  mlir::registerSymbolPrivatize();
 }
 
 
@@ -163,7 +178,7 @@ MlirPass mlirCreateTransformsTopologicalSort() {
   return wrap(mlir::createTopologicalSortPass().release());
 }
 void mlirRegisterTransformsTopologicalSort() {
-  registerTopologicalSort();
+  mlir::registerTopologicalSort();
 }
 
 

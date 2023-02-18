@@ -30,6 +30,11 @@ impl Location {
         Context::from_raw(unsafe { mlirLocationGetContext(self.raw()) })
     }
 
+    /// Returns the underlying location attribute of this location.
+    pub fn attr(&self) -> LocationAttr {
+        LocationAttr::try_from_raw(unsafe { mlirLocationGetAttribute(self.0) }).unwrap()
+    }
+
     /// Creates a name location owned by the given context.
     /// If child_loc is `None`, then the behavior is the same as having unknown child location.
     pub fn new_named(ctx: &Context, name: &str, child_loc: Option<&Self>) -> Self {
@@ -43,6 +48,8 @@ impl Location {
         Self::from_raw(unsafe { mlirLocationNameGet(ctx.raw(), name, child_loc) })
     }
 }
+
+impl_mlir_print!(Location);
 
 impl PartialEq for Location {
     fn eq(&self, other: &Self) -> bool {

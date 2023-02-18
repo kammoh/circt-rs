@@ -6,7 +6,6 @@
 use crate::crate_prelude::*;
 use circt_sys::*;
 use std::borrow::Borrow;
-use std::fmt::{Debug, Display};
 
 wrap_raw_ptr!(Type, Clone, Copy; doc="An MLIR type");
 
@@ -18,17 +17,7 @@ impl Type {
     }
 }
 
-impl Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.format(f)
-    }
-}
-
-impl Debug for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
+impl_display_debug!(Type);
 
 impl PartialEq for Type {
     fn eq(&self, other: &Self) -> bool {
@@ -49,12 +38,6 @@ pub trait Ty: WrapRawPtr<RawType = MlirType> {
         Context::try_from_raw(unsafe { mlirTypeGetContext(self.raw()) }).unwrap()
     }
 
-    fn format(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let fmt = FormatterCallback::new(f);
-        unsafe { mlirTypePrint(self.raw(), fmt.callback(), fmt.user_data()) };
-        Ok(())
-    }
-
     fn equal_to(&self, other: &Self) -> bool {
         unsafe { mlirTypeEqual(self.raw(), other.raw()) }
     }
@@ -62,6 +45,8 @@ pub trait Ty: WrapRawPtr<RawType = MlirType> {
     fn as_type(&self) -> Type {
         Type::from_raw(self.raw())
     }
+
+    impl_mlir_print_fn!(Type);
 }
 
 /// including for Type (unspecified type)

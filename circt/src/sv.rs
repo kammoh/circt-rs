@@ -1,5 +1,7 @@
 // Copyright (c) 2022-2023 Kamyar Mohajerani
 
+//! The sv dialect provides direct access to a wide variety of SystemVerilog constructs, including behavioral constructs, syntactic sugar constructs, and even idioms like ifdef blocks.
+
 use std::{path::Path, fmt::Write};
 
 use crate::crate_prelude::*;

@@ -93,6 +93,20 @@ impl HwModuleOp {
                     &ArrayAttr::new(ctx, port_names(ctx, outputs.iter())),
                 );
                 state.add_attribute(
+                    "argLocs",
+                    &ArrayAttr::new(
+                        ctx,
+                        inputs.iter().map(|pi| pi.loc.as_ref().unwrap_or(builder.loc()).attr()),
+                    ),
+                );
+                state.add_attribute(
+                    "resultLocs",
+                    &ArrayAttr::new(
+                        ctx,
+                        outputs.iter().map(|pi| pi.loc.as_ref().unwrap_or(builder.loc()).attr()),
+                    ),
+                );
+                state.add_attribute(
                     "parameters",
                     &ArrayAttr::new::<ParamDeclAttr>(ctx, parameters.iter()),
                 );
@@ -106,7 +120,7 @@ impl HwModuleOp {
                 );
                 state.add_attribute("comment", &StringAttr::new(ctx, comment));
             })
-            .expect("OpBuilder failed");
+            .ok_or(Error::simple("OpBuilder failed"))?;
         let body = op.first_block().ok_or(Error::IsNone)?;
         builder.set_insertion_point(Some(InsertPoint::BlockEnd(body)));
         Ok(op)
@@ -147,6 +161,7 @@ pub struct PortInfo {
     pub name: String,
     pub direction: PortDirection,
     pub ty: Type,
+    pub loc: Option<Location>,
     // pub arg_num: usize, // order
 }
 
@@ -156,6 +171,7 @@ impl PortInfo {
             name: name.to_string(),
             direction,
             ty: ty.as_type(),
+            loc: None,
         }
     }
     pub fn input(name: &str, ty: &impl Ty) -> Self {

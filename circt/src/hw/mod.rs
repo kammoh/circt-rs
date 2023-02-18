@@ -1,13 +1,18 @@
 // Copyright (c) 2016-2021 Fabian Schuiki
 // Copyright (c) 2022-2023 Kamyar Mohajerani
 
+//! The hw dialect provides unifying structure and abstractions that are useful for a wide range of hardware modeling problems.
+//! It allows other dialects to “mix in” with it to provide higher level functionality.
+//! hw is roughly akin to the “std” dialect in MLIR (but better curated).
+//! See https://circt.llvm.org/docs/Dialects/HW/RationaleHW/ and https://circt.llvm.org/docs/Dialects/HW/ for more details.
+
 mod attr;
-mod module;
 mod ops;
+mod structure;
 mod ty;
 pub use attr::*;
-pub use module::*;
 pub use ops::*;
+pub use structure::*;
 pub use ty::*;
 
 use crate::crate_prelude::*;

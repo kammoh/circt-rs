@@ -136,7 +136,7 @@ pub struct PrintHandler(bool);
 
 impl HandlerObject for PrintHandler {
     fn handle(&mut self, diag: Diagnostic) -> LogicalResult {
-        println!("Severity: {:?}", diag.severity());
+        println!("Severity:{:?} Location:{}", diag.severity(), diag.location());
         self.0.into()
     }
 }
